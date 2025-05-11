@@ -1,0 +1,29 @@
+{
+    "current_location_id": null,
+    "inventory": [],
+    "game_active": false,
+    "hp": 65,
+    "max_hp": 65,
+    "attack_power": 13,
+    "special_power": 0,
+    "name": "Gemini Adventurer",
+    "gender": "Male",
+    "species": "human",
+    "class": "warrior",
+    "special_moves": {
+        "power_strike": {
+            "name": "Power Strike",
+            "damage_multiplier": 1.5,
+            "cooldown_max": 2,
+            "description": "A strong attack that deals 1.5x damage."
+        }
+    },
+    "special_cooldowns": {
+        "power_strike": 0
+    },
+    "combat_target_id": null,
+    "is_deflecting": false,
+    "dialogue_npc_id": null,
+    "dialogue_options_pending": {},
+    "flags": {}
+}
