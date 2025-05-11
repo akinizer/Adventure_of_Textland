@@ -299,7 +299,11 @@ locations = {
                 "description_closed": "A worn wooden crate. It seems easy to open.",
                 "description_opened": "The crate is now open and empty.",
                 "closed": True,
-                "on_open_message": "You pry open the crate.",
+                "actions": { # Add actions for the crate
+                    "open": { # Define an "open" action
+                        "outcomes": [{"type": "reveal_items", "message": "You pry open the crate."}]
+                    }
+                },
                 "contains_on_open": [] # Starter items will be placed here
             }
         },
@@ -407,7 +411,8 @@ player = {
     "is_deflecting": False,
     "dialogue_npc_id": None,
     "dialogue_options_pending": {},
-    "flags": {}
+    "flags": {},
+    "is_paused": False # New flag for game pause state
 }
 
 PLAYER_LOGS_DIR = "player_data"
@@ -721,10 +726,23 @@ def handle_environmental_interaction(feature_id, action_verb):
 
     print(chosen_outcome.get("message", "You interact with the object."))
     if chosen_outcome.get("type") == "item":
-        award_item_to_player(chosen_outcome["item_id"])
-        if player["current_location_id"] == "generic_start_room" and feature_id == "worn_crate":
-            player["flags"]["found_starter_items"] = True
-            print("Among the items, you find a map of a nearby settlement and a small pouch of coins.")
+        # This part is for features that directly give an item upon a generic interaction.
+        # The crate will now use "reveal_items".
+        award_item_to_player(chosen_outcome["item_id"]) 
+    elif chosen_outcome.get("type") == "reveal_items" and feature_id == "worn_crate":
+        if feature.get("closed"):
+            items_in_crate = list(feature.get("contains_on_open", [])) # Make a copy
+            if items_in_crate:
+                found_items_desc = []
+                for item_id in items_in_crate:
+                    locations[player["current_location_id"]].setdefault("items", []).append(item_id)
+                    found_items_desc.append(items_data.get(item_id, {}).get("name", item_id))
+                print(f"Inside, you find: {', '.join(found_items_desc)}.")
+                if player["current_location_id"] == "generic_start_room": # Specific message for starter crate
+                     print("Among the items, you find a map of a nearby settlement and a small pouch of coins.")
+            feature["contains_on_open"] = [] # Empty the crate's internal list
+            feature["closed"] = False
+            player["flags"]["found_starter_items"] = True # Still set this flag
     elif chosen_outcome.get("type") == "stat_change" and chosen_outcome.get("stat") == "hp":
         player["hp"] = min(player["max_hp"], player["hp"] + chosen_outcome.get("amount", 0))
         print(f"Your HP is now {player['hp']}/{player['max_hp']}.")
@@ -749,12 +767,23 @@ def run_minimal_web_server():
                 body { font-family: sans-serif; margin: 20px; background-color: #f0f0f0; color: #333; }
                 .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
                 h1 { color: #5a5a5a; }
+                #settings-button-container { position: fixed; top: 10px; right: 10px; z-index: 1001;}
+                #settings-gear-button { font-size: 24px; background: none; border: none; cursor: pointer; padding: 5px;}
                 .actions-panel { margin-bottom: 15px; }
                 .actions-panel button { margin-right: 5px; margin-bottom: 5px; }
                 .dynamic-options button { display: block; margin-bottom: 5px; }
                 .output-area { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; background-color: #f9f9f9; margin-bottom: 10px; }
                 button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
                 button:hover { background-color: #0056b3; }
+                #pause-overlay {
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background-color: rgba(0,0,0,0.7); color: white;
+                    display: none; /* Hidden by default */
+                    justify-content: center; align-items: center;
+                    font-size: 3em; font-weight: bold;
+                    z-index: 2000; /* Above everything else */
+                }
+                .modal-menu-button { margin: 5px; } /* Style for buttons in our custom modal */
             </style>
         </head>
         <body>
@@ -762,6 +791,9 @@ def run_minimal_web_server():
                 <h1>Text RPG - Browser Version</h1>
                 <div id="character-creation-area">
                     <!-- Content will be dynamically loaded here -->
+                </div>
+                <div id="settings-button-container" style="display: none;">
+                    <button id="settings-gear-button">⚙️</button>
                 </div>
                 <div id="game-interface" style="display: none;"> <!-- Initially hidden -->
                     <div id="game-output" class="output-area">
@@ -789,25 +821,41 @@ def run_minimal_web_server():
                     </div>
                     <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
                 </div>
+                <div id="feature-interactions-panel" class="actions-panel" style="display: none;">
+                    <p><strong>Room Features:</strong></p>
+                    <!-- Dynamic feature buttons will go here -->
+                </div>
+                <div id="pause-overlay">PAUSED</div>
             </div>
             <script>
                 let creationStep = 'species'; // 'species', 'class', 'name_gender', 'done'
                 let chosenSpecies = null;
                 let chosenClass = null;
+                let gameIsPaused = false;
+                let gameIsActiveForInput = false; // True when game interface is shown
 
                 // Simple Modal Logic
-                function showModal(title, message, onConfirm, onCancel) {
+                function showMenuModal(title, message, buttonsConfig) {
+                    closeModal(); // Close any existing modal first
+                    let buttonsHTML = '';
+                    if (buttonsConfig && buttonsConfig.length > 0) {
+                        buttonsHTML = buttonsConfig.map((btn, index) => `<button class="modal-menu-button" id="modal-btn-${index}">${btn.text}</button>`).join(' ');
+                    }
+
                     const modalHTML = `
                         <div id="custom-modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
                             <div id="custom-modal-content" style="background-color: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.25); text-align: center;">
                                 <h3>${title}</h3>
                                 <p>${message}</p>
-                                <button id="modal-confirm-btn">Do it</button> <button id="modal-cancel-btn">Cancel</button>
+                                <div>${buttonsHTML}</div>
                             </div>
                         </div>`;
                     document.body.insertAdjacentHTML('beforeend', modalHTML);
-                    document.getElementById('modal-confirm-btn').onclick = () => { onConfirm(); closeModal(); };
-                    document.getElementById('modal-cancel-btn').onclick = () => { if(onCancel) onCancel(); closeModal(); };
+                    if (buttonsConfig && buttonsConfig.length > 0) {
+                        buttonsConfig.forEach((btn, index) => {
+                            document.getElementById(`modal-btn-${index}`).onclick = () => { btn.action(); closeModal(); };
+                        });
+                    }
                 }
                 function closeModal() {
                     const modalOverlay = document.getElementById('custom-modal-overlay');
@@ -817,11 +865,19 @@ def run_minimal_web_server():
                 async function showInitialCharacterScreen() {
                     console.log("showInitialCharacterScreen called.");
                     const creationArea = document.getElementById('character-creation-area');
+                    if (!creationArea) {
+                        console.error("CRITICAL ERROR: The 'character-creation-area' DIV was not found in the HTML. Cannot proceed with character screen.");
+                        return;
+                    }
                     creationArea.innerHTML = '<h2>Load Character or Create New:</h2><div id="character-options-buttons" class="dynamic-options"><p>Loading character list...</p></div>';
                     const charOptionsDiv = document.getElementById('character-options-buttons');
+                    if (!charOptionsDiv) {
+                        console.error("CRITICAL ERROR: The 'character-options-buttons' DIV was not found after setting innerHTML for creationArea. Cannot display character options.");
+                        return;
+                    }
 
                     try {
-                        const response = await fetch('/api/get_characters');
+                        const response = await fetch('/api/get_characters'); // This is the API call
                         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                         const characters = await response.json();
                         
@@ -860,10 +916,17 @@ def run_minimal_web_server():
                         charOptionsDiv.appendChild(newCharButton);
 
                     } catch (error) {
-                        charOptionsDiv.innerHTML = `<p>Error loading character list: ${error}. <button onclick="loadSpecies()">Create New Character</button></p>`;
+                        console.error("Error occurred in showInitialCharacterScreen while fetching or processing characters:", error);
+                        if (charOptionsDiv) { // Ensure charOptionsDiv was found before trying to modify it
+                            charOptionsDiv.innerHTML = `<p>Error loading character list: ${error.message || error}. <button onclick="loadSpecies()">Create New Character</button></p>`;
+                        } else {
+                            creationArea.innerHTML = `<h2>Error Displaying Character List</h2><p>A problem occurred. Please check the browser console for details. You can try to <button onclick="loadSpecies()">Create New Character</button>.</p>`;
+                        }
                     }
                     creationArea.style.display = 'block'; // Ensure it's visible
                     document.getElementById('game-interface').style.display = 'none'; // Ensure game interface is hidden
+                    document.getElementById('settings-button-container').style.display = 'none';
+                    gameIsActiveForInput = false;
                 }
 
                 async function loadSpecies() {
@@ -944,7 +1007,7 @@ def run_minimal_web_server():
                         </div>
                         <button onclick="submitCharacterCreation()" style="margin-top: 15px;">Start Adventure</button>
                     `;
-                    // Add event listener for real-time name input filtering and set maxlength
+                    // Add event listener for real-time name input filtering
                     const charNameInput = document.getElementById('charName');
                     if (charNameInput) {
                         charNameInput.addEventListener('input', function(event) {
@@ -952,7 +1015,7 @@ def run_minimal_web_server():
                             let value = event.target.value;
                             let filteredValue = value.split('').filter(char => allowedPattern.test(char)).join('');
                             event.target.value = filteredValue;
-                            // Note: The maxlength attribute is handled directly in the HTML input tag now.
+                            // Note: The maxlength attribute is handled directly in the HTML input tag.
                         });
                     }
                 }
@@ -996,8 +1059,9 @@ def run_minimal_web_server():
                         creationArea.style.display = 'none';
                         gameInterface.style.display = 'block';
                         outputElement.innerHTML = ''; // Clear "creating character" message
-                        // Use a modified performAction or a new function to display initial scene
                         displaySceneData(initialSceneData, "Character created! Your adventure begins.");
+                        document.getElementById('settings-button-container').style.display = 'block';
+                        gameIsActiveForInput = true;
 
                     } catch (error) {
                         outputElement.innerHTML = `<p>Error creating character: ${error}</p>`;
@@ -1005,10 +1069,10 @@ def run_minimal_web_server():
                 }
 
                 function confirmDeleteCharacter(characterName) {
-                    showModal(
+                    showMenuModal(
                         'Confirm Deletion',
                         `This operation is permanent for character '${characterName}', proceed cautiously.`,
-                        () => executeDeleteCharacter(characterName) // onConfirm
+                        [{text: "Do it", action: () => executeDeleteCharacter(characterName)}, {text: "Cancel", action: () => {}}]
                     );
                 }
 
@@ -1047,12 +1111,22 @@ def run_minimal_web_server():
                         gameInterface.style.display = 'block';
                         outputElement.innerHTML = ''; 
                         displaySceneData(loadedSceneData, `Loaded character: ${characterName}.`);
+                        document.getElementById('settings-button-container').style.display = 'block';
+                        gameIsActiveForInput = true;
                     } catch (error) {
                         outputElement.innerHTML = `<p>Error loading character ${characterName}: ${error}</p>`;
                     }
                 }
 
                 async function performAction(actionString) { 
+                    if (gameIsPaused) {
+                        console.log("Game is paused. Action not sent.");
+                        // Optionally display a message in the game output
+                        // const outputElement = document.getElementById('game-output');
+                        // outputElement.innerHTML += "<p>Game is paused. Press 'P' to resume.</p>";
+                        // outputElement.scrollTop = outputElement.scrollHeight;
+                        return;
+                    }
                     const outputElement = document.getElementById('game-output');
                     
                     const p_attempt = document.createElement('p');
@@ -1118,11 +1192,46 @@ def run_minimal_web_server():
                                 });
                             }
                         }
+
+                        // Handle interactable features
+                        const featurePanel = document.getElementById('feature-interactions-panel');
+                        const featureButtonsContainer = featurePanel.querySelector('p').nextElementSibling || document.createElement('div'); // Get/create div for buttons
+                        if (!featurePanel.querySelector('div')) featurePanel.appendChild(featureButtonsContainer); // Append if new
+                        featureButtonsContainer.innerHTML = ''; // Clear previous feature buttons
+
+                        if (data.interactable_features && data.interactable_features.length > 0) {
+                            data.interactable_features.forEach(feature => {
+                                const featureButton = document.createElement('button');
+                                // Example: "Open Worn Crate" or "Search Loose Rocks"
+                                featureButton.textContent = `${feature.action.charAt(0).toUpperCase() + feature.action.slice(1)} ${feature.name}`;
+                                featureButton.onclick = () => performAction(`${feature.action} ${feature.id}`); // e.g., "open worn_crate"
+                                featureButtonsContainer.appendChild(featureButton);
+                            });
+                            featurePanel.style.display = 'block';
+                        } else {
+                            featurePanel.style.display = 'none';
+                        }
                 }
 
                 // Initial load
                 window.onload = () => {
                     showInitialCharacterScreen(); // Start with character selection/load screen
+
+                    const settingsButton = document.getElementById('settings-gear-button');
+                    if(settingsButton) {
+                        settingsButton.onclick = () => {
+                            showMenuModal("Game Menu", "", [
+                                {text: "Main Menu", action: goToMainMenu},
+                                {text: "Cancel", action: () => {}} // Empty action for cancel
+                            ]);
+                        };
+                    }
+
+                    document.addEventListener('keydown', function(event) {
+                        if ((event.key === 'p' || event.key === 'P') && !event.repeat && gameIsActiveForInput) { // Only allow pause if game is active
+                            togglePauseGame();
+                        }
+                    });
                 };
             </script>
         </body>
@@ -1130,6 +1239,14 @@ def run_minimal_web_server():
         """
         html_content = html_content_template.replace("__MAX_NAME_LENGTH_PLACEHOLDER__", str(MAX_NAME_LENGTH))
         return html_content
+
+    # Optional: Flask endpoint to sync pause state with server if needed later
+    # @flask_app_instance.route('/api/set_pause_state', methods=['POST'])
+    # def set_pause_state_route():
+    #     data = request.get_json()
+    #     player["is_paused"] = data.get("paused", False)
+    #     return jsonify({"message": "Pause state updated", "is_paused": player["is_paused"]})
+
 
     @flask_app_instance.route('/process_game_action', methods=['POST'])
     def process_game_action_route():
@@ -1153,7 +1270,8 @@ def run_minimal_web_server():
             "player_name": player.get("name"),
             "player_max_hp": player.get("max_hp"),
             "location_name": "Unknown Area", # Default
-            "description": "An unfamiliar place." # Default
+            "description": "An unfamiliar place.", # Default
+            "interactable_features": [] # New: list of features player can interact with
         }
 
         if not player.get("game_active") and action not in ['!start']: # Check game_active safely
@@ -1166,12 +1284,23 @@ def run_minimal_web_server():
                 # location_name and description already set by default above
                 game_response["location_name"] = locations[loc_id].get("name", "Unknown Area")
                 game_response["description"] = locations[loc_id]["description"]
+                # Populate interactable features
+                current_location_data = locations.get(loc_id, {})
+                features_in_room = current_location_data.get("features", {})
+                for f_id, f_data in features_in_room.items():
+                    # For simplicity, let's assume the first defined action is the primary one for a button
+                    # Or, if it's the 'worn_crate' and it's closed, suggest 'open'
+                    primary_action = None
+                    if f_id == "worn_crate" and f_data.get("closed"):
+                        primary_action = "open"
+                    elif f_data.get("actions"):
+                        primary_action = list(f_data["actions"].keys())[0]
+
+                    if primary_action:
+                        game_response["interactable_features"].append({"id": f_id, "name": f_id.replace("_", " ").capitalize(), "action": primary_action})
                 game_response["message"] = "" # Description is primary
             else:
                 game_response["message"] = "Current location is unknown."
-                # Ensure defaults are sent if loc_id is somehow invalid
-                game_response["location_name"] = "Unknown Area"
-                game_response["description"] = "You are in an uncharted void."
         elif action.startswith('go '):
             direction = action.split(' ', 1)[1] 
             current_loc_id = player["current_location_id"]
@@ -1184,10 +1313,21 @@ def run_minimal_web_server():
                 game_response["message"] = f"You walk {direction}."
                 game_response["location_name"] = new_location_data.get("name", "Unknown Area")
                 game_response["description"] = new_location_data.get("description", "An unfamiliar place.")
+                # Populate interactable features for the new room
+                features_in_new_room = new_location_data.get("features", {})
+                for f_id, f_data in features_in_new_room.items():
+                    primary_action = None
+                    if f_id == "worn_crate" and f_data.get("closed"):
+                        primary_action = "open"
+                    elif f_data.get("actions"):
+                        primary_action = list(f_data["actions"].keys())[0]
+                    if primary_action:
+                         game_response["interactable_features"].append({"id": f_id, "name": f_id.replace("_", " ").capitalize(), "action": primary_action})
             else:
                 game_response["message"] = f"You can't go {direction} from here."
                 game_response["location_name"] = current_location_data.get("name", "Unknown Area")
                 game_response["description"] = current_location_data.get("description", "An unfamiliar place.")
+                # Potentially list features of current room if move failed
 
         elif action == 'inventory':
             # Ensure inventory key exists
@@ -1213,9 +1353,52 @@ def run_minimal_web_server():
                 game_response["location_name"] = "Unknown Area"
                 game_response["description"] = "You are lost and cannot see a map."
         else:
-            game_response["message"] = f"The action '{action}' is not fully implemented for the browser interface yet."
-            game_response["location_name"] = locations.get(player["current_location_id"], {}).get("name", "Unknown Area")
-            game_response["description"] = locations.get(player["current_location_id"], {}).get("description", "An unfamiliar place.")
+            # Handle specific actions like "open worn_crate"
+            if action == "open worn_crate" and player["current_location_id"] == "generic_start_room":
+                crate = locations["generic_start_room"]["features"]["worn_crate"]
+                if crate.get("closed"):
+                    # Simulate the handle_environmental_interaction for the browser
+                    game_response["message"] = "You pry open the crate." # Base message
+                    items_in_crate = list(crate.get("contains_on_open", []))
+                    found_items_desc_web = []
+                    if items_in_crate:
+                        for item_id in items_in_crate:
+                            # Add items to the room's list for the browser to see them as takeable
+                            locations[player["current_location_id"]].setdefault("items", []).append(item_id)
+                            found_items_desc_web.append(items_data.get(item_id, {}).get("name", item_id))
+                        game_response["message"] += f"\nInside, you find: {', '.join(found_items_desc_web)}."
+                        if player["current_location_id"] == "generic_start_room":
+                            game_response["message"] += "\nAmong the items, you find a map of a nearby settlement and a small pouch of coins."
+                    
+                    crate["contains_on_open"] = [] # Empty the crate's internal list
+                    crate["closed"] = False # Mark as opened
+                    player["flags"]["found_starter_items"] = True # Set flag
+                    # Populate room items for the browser to display take options
+                    game_response["room_items"] = [items_data.get(item_id, {}).get("name", item_id) for item_id in locations[player["current_location_id"]].get("items", [])]
+                else:
+                    game_response["message"] = "The crate is already open and empty."
+            # This 'else' was for other actions, now the 'open worn_crate' is handled above.
+            else:
+                game_response["message"] = f"The action '{action}' is not fully implemented for the browser interface yet."
+            
+            game_response["location_name"] = locations.get(player.get("current_location_id"), {}).get("name", "Unknown Area")
+            game_response["description"] = locations.get(player.get("current_location_id"), {}).get("description", "An unfamiliar place.")
+            # Re-populate interactable features for the current room after any action
+            current_location_data = locations.get(player.get("current_location_id"), {})
+            if current_location_data: # Ensure current_location_data is not None
+                features_in_room = current_location_data.get("features", {})
+                for f_id, f_data in features_in_room.items():
+                    primary_action = None
+                    if f_id == "worn_crate" and f_data.get("closed"): # Check if crate is still closed
+                        primary_action = "open"
+                    elif f_data.get("actions") and not (f_id == "worn_crate" and not f_data.get("closed")): # Don't show generic for opened crate
+                        primary_action = list(f_data["actions"].keys())[0]
+                    if primary_action:
+                        game_response.setdefault("interactable_features", []).append({"id": f_id, "name": f_id.replace("_", " ").capitalize(), "action": primary_action})
+            # Always include current room items in the response if any action was processed
+            current_room_items_data = locations.get(player.get("current_location_id"), {}).get("items", [])
+            if current_room_items_data:
+                game_response["room_items"] = [items_data.get(item_id, {}).get("name", item_id) for item_id in current_room_items_data]
         return jsonify(game_response)
 
     @flask_app_instance.route('/get_species', methods=['GET'])
@@ -1338,9 +1521,8 @@ def launch_web_interface():
         print(f"Could not open web browser: {e}")
         print("Please navigate to http://127.0.0.1:5000/ manually.")
 
-    print("\nNote: The browser version is a conceptual interface.")
+    print("\nNote: The browser version is under active development.")
     print("The text-based game continues in this terminal.")
-    print("Game state is NOT shared between the terminal and browser versions at this stage.")
     print("To stop the web server, quit this terminal application (which will stop the daemon thread).")
 
 def show_current_scene():
@@ -1655,14 +1837,8 @@ def process_command(full_command_input):
         if player["current_location_id"] == "generic_start_room":
             crate = locations["generic_start_room"]["features"]["worn_crate"]
             if crate["closed"]:
-                # Manually trigger the "open" logic for the crate
-                print(crate["on_open_message"])
-                for item_id in crate["contains_on_open"]:
-                    award_item_to_player(item_id)
-                crate["contains_on_open"] = [] # Empty it after opening
-                crate["closed"] = False
-                player["flags"]["found_starter_items"] = True
-                print("Among the items, you find a map of a nearby settlement and a small pouch of coins.")
+                # Use the environmental interaction handler for consistency
+                handle_environmental_interaction("worn_crate", "open")
             else:
                 print("The crate is already open and empty.")
         else:
@@ -1670,6 +1846,7 @@ def process_command(full_command_input):
     elif command == "take":
         if not args: print("Take what?")
         else:
+            # This 'take' command logic should now work for items revealed from the crate
             item_name_input = " ".join(args)
             item_to_take = None
             room_items = location_data.get("items", [])
@@ -1679,6 +1856,7 @@ def process_command(full_command_input):
                     item_to_take = r_item_id
                     break
             if item_to_take:
+                # award_item_to_player already handles adding to inventory and printing message
                 player["inventory"].append(item_to_take)
                 room_items.remove(item_to_take)
                 print(f"You picked up the {items_data.get(item_to_take, {}).get('name', item_to_take.replace('_',' '))}.")
