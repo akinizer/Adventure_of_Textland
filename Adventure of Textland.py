@@ -420,6 +420,7 @@ player = {
 
 PLAYER_LOGS_DIR = "player_data"
 MAX_NAME_LENGTH = 20
+CITY_ZONES = ["Eldoria", "Riverford"] # Zones considered as cities for saving
 # Stricter pattern for humanoid names: only letters, spaces, hyphens, apostrophes.
 ALLOWED_HUMANOID_NAME_PATTERN = re.compile(r"^[a-zA-Z '-]+$") 
 
@@ -550,21 +551,39 @@ def sanitize_filename(name):
     name = re.sub(r'(?u)[^-\w.]', '', name) # Remove non-alphanumeric (excluding -, _, .)
     return name if name else "invalid_name"
 
-def log_player_data(event_description="character_creation"):
-    """Logs current player data to a file."""
-    if not os.path.exists(PLAYER_LOGS_DIR):
-        os.makedirs(PLAYER_LOGS_DIR)
+def save_player_data(reason_for_save="Game state saved"):
+    """Saves current player data to their character_creation.json file."""
+    if not player.get("name"):
+        print("[Error] Cannot save game: Player name not set.")
+        return False # Indicate failure
 
-    player_name_sanitized = sanitize_filename(player.get("name", "unknown_player"))
+    if not os.path.exists(PLAYER_LOGS_DIR):
+        try:
+            os.makedirs(PLAYER_LOGS_DIR)
+        except OSError as e:
+            print(f"[Error] Could not create player logs directory: {e}")
+            return False
+
+    player_name_sanitized = sanitize_filename(player.get("name")) # Name is validated before this point
     player_specific_dir = os.path.join(PLAYER_LOGS_DIR, player_name_sanitized)
 
     if not os.path.exists(player_specific_dir):
-        os.makedirs(player_specific_dir)
+        try:
+            os.makedirs(player_specific_dir)
+        except OSError as e:
+            print(f"[Error] Could not create directory for player '{player.get('name')}': {e}")
+            return False
 
-    log_file_path = os.path.join(player_specific_dir, f"{event_description}.json")
-    with open(log_file_path, 'w') as f:
-        json.dump(player, f, indent=4)
-    print(f"[Log] Player data for '{player.get('name')}' event '{event_description}' saved to {log_file_path}")
+    # Always save to the canonical save file name that load_character_data uses.
+    save_file_path = os.path.join(player_specific_dir, "character_creation.json")
+    try:
+        with open(save_file_path, 'w') as f:
+            json.dump(player, f, indent=4)
+        print(f"[Save] {reason_for_save}. Player data for '{player.get('name')}' saved to {save_file_path}")
+        return True # Indicate success
+    except Exception as e:
+        print(f"[Error] Failed to save player data for '{player.get('name')}': {e}")
+        return False
 
 def delete_character_data(character_display_name):
     """Deletes a character's data directory."""
@@ -659,8 +678,8 @@ def _apply_character_choices_and_stats(species_id, class_id, char_name, char_gen
     player["flags"] = {} # Reset flags for a new character
 
     print(f"\nCharacter '{player['name']}' ({player['gender']} {species_info['name']} {class_info['name']}) created!")
-    # Note: log_player_data is a different logger for character save files.
-    log_player_data(event_description="character_creation") # Log after successful creation
+    # Save the initial state of the newly created character.
+    save_player_data(reason_for_save=f"Character '{player['name']}' created and initial state saved")
     return True
 
 
@@ -924,6 +943,10 @@ def run_minimal_web_server():
                         <button onclick="performAction('inventory')">Check Inventory</button>
                         <button onclick="performAction('!map')">View Map</button>
                     </div>
+                    <div id="game-actions-panel" class="actions-panel" style="display: none;">
+                        <p><strong>Game Actions:</strong></p>
+                        <!-- Save button will go here -->
+                    </div>
                     <div class="actions-panel">
                         <p><strong>Movement:</strong> (Would show available directions)</p>
                         <button onclick="performAction('go north')">Go North</button>
@@ -933,12 +956,8 @@ def run_minimal_web_server():
                     </div>
                     <div class="actions-panel dynamic-options">
                         <p><strong>Interactions:</strong> (Would show available items/NPCs/features)</p>
-                        <button onclick="performAction('take <item_example>')">Take Item</button>
+                        <!-- Generic 'Take Item' button removed as dynamic buttons are now generated -->
                         <button onclick="performAction('talk <npc_example>')">Talk to NPC</button>
-                    <!-- This 'take <item_example>' button is a placeholder. -->
-                    <!-- Dynamic 'take' buttons for specific items will be generated -->
-                    <!-- in the #room-items-panel below. -->
-                    <!-- We can remove or hide the generic placeholder later if desired. -->
                         <button onclick="performAction('use <item> on <feature>')">Use Item On...</button>
                         <button onclick="performAction('search <feature>')">Search Feature</button>
                     </div>
@@ -1373,6 +1392,29 @@ def run_minimal_web_server():
                             }
                         }
                 }
+                
+                function setupGameActions(data) {
+                    const gameActionsPanel = document.getElementById('game-actions-panel');
+                    if (!gameActionsPanel) return;
+
+                    const buttonsContainer = gameActionsPanel.querySelector('div') || document.createElement('div');
+                    if (!gameActionsPanel.contains(buttonsContainer)) gameActionsPanel.appendChild(buttonsContainer);
+                    buttonsContainer.innerHTML = ''; // Clear previous buttons
+
+                    if (data.can_save_in_city) {
+                        const saveButton = document.createElement('button');
+                        saveButton.textContent = 'Save Game';
+                        saveButton.onclick = async () => {
+                            const response = await fetch('/api/save_game_state', { method: 'POST' });
+                            const result = await response.json();
+                            appendMessageToOutput(result.message); // Helper to add message to game output
+                        };
+                        buttonsContainer.appendChild(saveButton);
+                        gameActionsPanel.style.display = 'block';
+                    } else {
+                        gameActionsPanel.style.display = 'none';
+                    }
+                }
 
                 // Initial load
                 window.onload = () => {
@@ -1394,6 +1436,14 @@ def run_minimal_web_server():
                         }
                     });
                 };
+
+                function appendMessageToOutput(messageText) {
+                    const outputElement = document.getElementById('game-output');
+                    const p_msg = document.createElement('p');
+                    p_msg.textContent = messageText;
+                    outputElement.appendChild(p_msg);
+                    outputElement.scrollTop = outputElement.scrollHeight;
+                }
             </script>
         </body>
         </html>
@@ -1433,7 +1483,8 @@ def run_minimal_web_server():
             "location_name": "Unknown Area", # Default
             "description": "An unfamiliar place.", # Default
             "interactable_features": [], 
-            "room_items": [] # List of items in the room
+            "room_items": [], # List of items in the room
+            "can_save_in_city": False # Default save status
         }
 
         if not player.get("game_active") and action not in ['!start']: # Check game_active safely
@@ -1582,6 +1633,10 @@ def run_minimal_web_server():
         game_response["player_hp"] = player.get("hp")
         game_response["player_max_hp"] = player.get("max_hp")
         game_response["player_name"] = player.get("name")
+        
+        # Determine if saving is allowed
+        current_zone_for_save = current_location_data_for_response.get("zone")
+        game_response["can_save_in_city"] = current_zone_for_save in CITY_ZONES
 
         return jsonify(game_response)
 
@@ -1708,6 +1763,20 @@ def run_minimal_web_server():
             ]
             return jsonify(loaded_scene_data)
         return jsonify({"error": f"Failed to load character '{character_name}'."}), 404
+
+    @flask_app_instance.route('/api/save_game_state', methods=['POST'])
+    def save_game_state_route():
+        if not player.get("game_active") or not player.get("name"):
+            return jsonify({"message": "Cannot save: No active character or game not started."}), 400
+
+        current_loc_id = player.get("current_location_id")
+        current_zone = locations.get(current_loc_id, {}).get("zone")
+        if current_zone not in CITY_ZONES:
+            return jsonify({"message": "Cannot save here. You must be in a city."}), 403
+
+        if save_player_data(reason_for_save="Game progress saved via web interface"):
+            return jsonify({"message": f"Game saved successfully for {player.get('name')}."})
+        return jsonify({"message": "Failed to save game on server."}), 500
 
     @flask_app_instance.route('/test')
     def test_route():
@@ -1848,6 +1917,10 @@ def show_current_scene():
     print("  !start_browser - Open conceptual browser interface.")
     print("  !map           - Show a map of the current area.")
     print("  look           - Describe your surroundings and actions again.")
+    current_zone = location_data.get("zone")
+    if current_zone in CITY_ZONES:
+        print("  !save          - Save your progress.")
+
     print("  go <direction>")
     if location_data.get("exits"):
         print(f"    (Available exits: {', '.join(location_data['exits'].keys())})")
@@ -1936,6 +2009,16 @@ def process_command(full_command_input):
     elif command == "!start_browser": 
         launch_web_interface()
         return True
+    elif command == "!save":
+        if not player["game_active"]:
+            print("Game not active. Cannot save.")
+            return True
+        current_zone = locations[player["current_location_id"]].get("zone")
+        if current_zone in CITY_ZONES:
+            save_player_data(reason_for_save="Game progress manually saved")
+        else:
+            print("You can only save your progress in a city.")
+        return True # Command processed, show scene again
     elif command == "!quit": 
         print(f"\nYou decide to end your adventure here. Farewell!" if player["game_active"] else "\nFarewell!")
         return False
@@ -2310,670 +2393,3 @@ if __name__ == "__main__":
     # Only run main_game_loop if not exclusively in browser mode or if browser failed to start
     if player["game_active"] or (not start_browser_on_launch and not player["game_active"]):
         main_game_loop()
-    elif not player["game_active"] and not start_browser_on_launch:
-        print("No character loaded or created. Exiting.")
-
-    @flask_app_instance.route('/get_species', methods=['GET'])
-    def get_species_route():
-        species_list = []
-        for s_id, data in species_data.items():
-            species_list.append({"id": s_id, "name": data["name"], "description": data["description"]})
-        return jsonify(species_list)
-
-    @flask_app_instance.route('/get_classes', methods=['GET'])
-    def get_classes_route():
-        class_list = []
-        for c_id, data in classes_data.items():
-            class_list.append({"id": c_id, "name": data["name"], "description": data["description"]})
-        return jsonify(class_list)
-
-    @flask_app_instance.route('/api/delete_character', methods=['POST'])
-    def delete_character_route():
-        data = request.get_json()
-        character_name = data.get('character_name')
-        if not character_name:
-            return jsonify({"error": "Character name not provided."}), 400
-        if delete_character_data(character_name):
-            return jsonify({"message": f"Character '{character_name}' deleted successfully."})
-        return jsonify({"error": f"Failed to delete character '{character_name}'."}), 500
-
-    @flask_app_instance.route('/api/get_characters', methods=['GET'])
-    def get_characters_route():
-        characters = list_existing_characters()
-        return jsonify(characters)
-
-    @flask_app_instance.route('/api/create_character', methods=['POST'])
-    def create_character_web_route():
-        data = request.get_json()
-        species_id = data.get('species_id')
-        class_id = data.get('class_id')
-        player_name = data.get('player_name')
-        player_gender = data.get('player_gender')
-
-        if not all([species_id, class_id, player_name, player_gender]):
-            print(f"DEBUG: Missing data in /api/create_character: {data}")
-            return jsonify({"error": "Missing character creation data."}), 400
-
-        if _apply_character_choices_and_stats(species_id, class_id, player_name, player_gender):
-            player["game_active"] = True 
-            species_info = species_data[player["species"]]
-            
-            start_room_id = "generic_start_room" 
-            player["current_location_id"] = start_room_id
-            class_info_for_items = classes_data[player["class"]]
-            if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
-                locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info_for_items["starter_items"])
-                locations[start_room_id]["features"]["worn_crate"]["closed"] = True
-            
-            initial_scene_data = {
-                "message": f"{species_info['backstory_intro']}\nYou feel a pull towards the {locations[start_room_id]['name']}.",
-                "player_hp": player.get("hp"),
-                "player_name": player.get("name"),
-                "player_max_hp": player.get("max_hp"),
-                "location_name": locations.get(player["current_location_id"], {}).get("name"),
-                "description": locations.get(player["current_location_id"], {}).get("description")
-            }
-            return jsonify(initial_scene_data)
-        else:
-            print(f"DEBUG: _apply_character_choices_and_stats failed for web creation: {data}")
-            return jsonify({"error": "Failed to create character on server."}), 500
-
-    @flask_app_instance.route('/api/load_character', methods=['POST'])
-    def load_character_web_route():
-        data = request.get_json()
-        character_name = data.get('character_name')
-        if not character_name:
-            return jsonify({"error": "Character name not provided."}), 400
-        
-        if load_character_data(character_name):
-            # Character data is now in global 'player'
-            loaded_scene_data = {
-                "message": f"Welcome back, {player.get('name')}!",
-                "player_hp": player.get("hp"),
-                "player_name": player.get("name"),
-                "player_max_hp": player.get("max_hp"),
-                "location_name": locations.get(player.get("current_location_id"), {}).get("name"),
-                "description": locations.get(player.get("current_location_id"), {}).get("description")
-            }
-            return jsonify(loaded_scene_data)
-        return jsonify({"error": f"Failed to load character '{character_name}'."}), 404
-
-    @flask_app_instance.route('/test')
-    def test_route():
-        print("Test route accessed!")
-        return "This is the test route. If you see this, routing is partially working."
-
-    print("Starting web server on http://127.0.0.1:5000/ ...")
-    try:
-        flask_app_instance.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
-    except Exception as e:
-        print(f"Failed to start or run web server: {e}")
-
-def launch_web_interface():
-    global web_server_thread
-    if not flask_available:
-        print("\nFlask library not found. Cannot start browser interface.")
-        print("Please install Flask to use this feature (e.g., 'pip install Flask').")
-        return
-
-    if web_server_thread and web_server_thread.is_alive():
-        print("Web server is already running or was attempted.")
-    else:
-        print("Attempting to launch web interface server...")
-        web_server_thread = threading.Thread(target=run_minimal_web_server, daemon=True)
-        web_server_thread.start()
-
-    time.sleep(1.5) 
-
-    try:
-        print("Opening browser to http://127.0.0.1:5000/ ...")
-        webbrowser.open_new_tab('http://127.0.0.1:5000/')
-        print("If the browser did not open, please navigate to http://127.0.0.1:5000/ manually.")
-    except Exception as e:
-        print(f"Could not open web browser: {e}")
-        print("Please navigate to http://127.0.0.1:5000/ manually.")
-
-    print("\nNote: The browser version is under active development.")
-    print("The text-based game continues in this terminal.")
-    print("To stop the web server, quit this terminal application (which will stop the daemon thread).")
-
-def show_current_scene():
-    if not player["game_active"]:
-        print("\nWelcome to the Text RPG Adventure!")
-        print("Type '!start' to begin your journey or '!quit' to exit.")
-        print("\nAvailable commands:")
-        print("  !start         - Begin the adventure.")
-        print("  !quit          - Exit the game.")
-        return
-
-    if player["dialogue_npc_id"] and player["dialogue_options_pending"]:
-        npc_id = player["dialogue_npc_id"]
-        npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
-        print(f"\n--- Talking to {npc_data['name']} ---")
-        print("Choose an option:")
-        for key, option_data in player["dialogue_options_pending"].items():
-            print(f"  {key}. {option_data['text']}")
-        print("\n(Type the number of your choice, or 'leave' to end conversation)")
-        return
-
-    if player["combat_target_id"]:
-        npc_id = player["combat_target_id"]
-        if npc_id not in locations[player["current_location_id"]]["npcs"]:
-            print(f"[Error] Combat target {npc_id} not found. Ending combat.")
-            player["combat_target_id"] = None
-        else:
-            npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
-            print("\n--- IN COMBAT ---")
-            print(f"Your HP: {player['hp']}/{player['max_hp']}")
-            print(f"Enemy: {npc_data['name']} | HP: {npc_data['hp']}/{npc_data['max_hp']}")
-            print(HOSTILE_MOB_VISUAL)
-            
-            print("\nCombat Commands:")
-            print("  attack                  - Perform a basic attack.")
-            for move_id, move_data in player["special_moves"].items():
-                cooldown_status = f"(Ready)" if player["special_cooldowns"].get(move_id, 0) == 0 else f"(Cooldown: {player['special_cooldowns'].get(move_id, 0)})"
-                print(f"  special {move_id.replace('_',' ')}   - {move_data['description']} {cooldown_status}")
-            print("  deflect                 - Reduce damage from the next attack.")
-            print("  item <item_name>        - Use an item from your inventory.")
-            return 
-
-    loc_id = player["current_location_id"]
-    if loc_id not in locations:
-        print(f"\n[ERROR] Current location '{loc_id}' not found. Resetting.")
-        player["current_location_id"] = "generic_start_room" # Default to start room if error
-        loc_id = player["current_location_id"]
-    
-    location_data = locations[loc_id]
-    print(f"\n--- {location_data['name']} (HP: {player['hp']}/{player['max_hp']}) ---")
-    if player.get("species") and player.get("class"):
-        player_name_display = player.get("name", "Adventurer")
-        species_name = species_data.get(player['species'], {}).get('name', 'Unknown Species')
-        class_name = classes_data.get(player['class'], {}).get('name', 'Unknown Class')
-        gender_display = player.get('gender', 'Unspecified')
-        print(f"    ({player_name_display} - {gender_display} {species_name} {class_name})")
-
-    print(location_data["description"])
-    if loc_id == "generic_start_room" and not player["flags"].get("found_starter_items"):
-        print("The air is thick with anticipation. You feel compelled to check the worn crate.")
-
-
-    room_npcs = location_data.get("npcs", {})
-    hostiles_present_desc = False
-    for npc_id, npc_data in room_npcs.items():
-        if npc_data.get("hostile") and player["combat_target_id"] != npc_id :
-            if not hostiles_present_desc:
-                print("\nDanger!")
-                hostiles_present_desc = True
-            print(f"A menacing {npc_data['name']} is here!")
-
-    if "features" in location_data and location_data["features"]:
-        print("\nYou notice:")
-        for feature_name, feature_data in location_data["features"].items():
-            base_desc = feature_data.get('description', 'It looks interesting.')
-            if feature_name == "chest": 
-                desc = feature_data.get('description_locked' if feature_data.get('locked') else 'description_unlocked', base_desc)
-            elif feature_name == "worn_crate": # Specific description for starter crate
-                 desc = feature_data.get('description_closed' if feature_data.get('closed') else 'description_opened', base_desc)
-            else:
-                desc = base_desc
-            print(f"  - {feature_name.replace('_', ' ').capitalize()}: {desc}")
-            if feature_data.get("actions"):
-                print(f"    (Actions: {', '.join(feature_data['actions'].keys())})")
-
-    if room_npcs:
-        print("\nPeople here:")
-        for npc_id, npc_data in room_npcs.items():
-            if not npc_data.get("hostile") or (npc_data.get("hostile") and player["combat_target_id"] != npc_id):
-                 print(f"  - {npc_data['name']} ({npc_data.get('description', 'An interesting individual.')})")
-    
-    room_items = location_data.get("items", [])
-    if room_items:
-        print("\nItems here: " + ", ".join([items_data.get(item, {}).get('name', item.replace("_", " ")) for item in room_items]))
-    else:
-        print("\nYou see no loose items here.")
-
-    print("\nAvailable commands:")
-    print("  !quit          - Exit the game.")
-    print("  !start_browser - Open conceptual browser interface.")
-    print("  !map           - Show a map of the current area.")
-    print("  look           - Describe your surroundings and actions again.")
-    print("  go <direction>")
-    if location_data.get("exits"):
-        print(f"    (Available exits: {', '.join(location_data['exits'].keys())})")
-    if room_items: print(f"  take <item>")
-    
-    inv_status = "(empty)" if not player["inventory"] else f"({len(player['inventory'])} item(s))"
-    print(f"  inventory (i)  - Check your inventory {inv_status}.")
-
-    if "features" in location_data:
-        for fname, fdata in location_data["features"].items():
-            if fname == "chest" and fdata.get("locked") and fdata.get("key_needed"):
-                print(f"  use <item> on {fname}")
-                break 
-            elif fname == "worn_crate" and fdata.get("closed"): # Suggest opening the crate
-                print(f"  open worn crate") # Or search, depending on defined actions
-                break
-    
-    if any(not npc.get("hostile") or (npc.get("hostile") and player["combat_target_id"] != npc_id) for npc_id, npc in room_npcs.items()):
-        available_to_talk = [npc["name"] for npc_id, npc in room_npcs.items() if not npc.get("hostile") or (npc.get("hostile") and player["combat_target_id"] != npc_id)]
-        if available_to_talk:
-            print(f"  talk <npc_name>")
-            if len(available_to_talk) <= 3:
-                print(f"    (You can talk to: {', '.join(available_to_talk)})")
-            else:
-                print(f"    (Several people are here to talk to.)")
-
-    for feature_name, feature_data in location_data.get("features", {}).items():
-        if feature_data.get("actions") and not (feature_name == "worn_crate" and feature_data.get("closed")): # Don't suggest generic action if specific "open" is suggested
-            first_action = list(feature_data["actions"].keys())[0]
-            print(f"  {first_action} {feature_name.replace('_', ' ')}")
-
-
-def draw_zone_map(current_loc_id):
-    """Draws or lists locations in the current zone and returns them as a list of strings."""
-    map_output_lines = [] 
-    current_zone = locations[current_loc_id].get("zone")
-    if not current_zone:
-        map_output_lines.append("This area is uncharted (no zone data).")
-        return map_output_lines 
-
-    if current_zone in zone_layouts:
-        layout = zone_layouts[current_zone]
-        map_output_lines.append(f"--- {layout['title']} ---")
-        map_grid_lines = [list(line) for line in layout["grid"]]
-        mapped_loc_ids = {char: loc_id for char, loc_id in layout["mapping"].items()}
-
-        for r_idx, row_str in enumerate(layout["grid"]):
-            for c_idx, char_in_grid in enumerate(row_str):
-                if char_in_grid in mapped_loc_ids:
-                    loc_id_at_char = mapped_loc_ids[char_in_grid]
-                    if loc_id_at_char == current_loc_id:
-                        if c_idx > 0 and c_idx < len(row_str) -1 and \
-                           map_grid_lines[r_idx][c_idx-1] == '[' and \
-                           map_grid_lines[r_idx][c_idx+1] == ']':
-                             map_grid_lines[r_idx][c_idx] = '@'
-        
-        for row_list in map_grid_lines:
-            map_output_lines.append("".join(row_list))
-        map_output_lines.append("") 
-        map_output_lines.append("@ - You are here")
-        map_output_lines.append("Other symbols represent locations.")
-    else:
-        map_output_lines.append(f"--- Area: {current_zone} ---")
-        map_output_lines.append("Locations in this area:")
-        zone_locs = [f"  - {data['name']}{' (You are here)' if loc_id == current_loc_id else ''}" 
-                     for loc_id, data in locations.items() if data.get("zone") == current_zone]
-        if zone_locs:
-            map_output_lines.extend(zone_locs)
-        else:
-            map_output_lines.append("  (No specific locations marked for this area map.)")
-    return map_output_lines
-
-
-def process_command(full_command_input):
-    full_command = full_command_input.lower().strip()
-    parts = full_command.split()
-    if not parts: return True
-    command = parts[0]
-    args = parts[1:]
-
-    if command == "!start":
-        if player["game_active"]: print("The game has already started!")
-        else:
-            initialize_game_state() 
-        return True
-    elif command == "!start_browser": 
-        launch_web_interface()
-        return True
-    elif command == "!quit": 
-        print(f"\nYou decide to end your adventure here. Farewell!" if player["game_active"] else "\nFarewell!")
-        return False
-    
-    if not player["game_active"]:
-        print(f"Unknown command: '{full_command}'. Type '!start' to begin.")
-        return True
-
-    if player["dialogue_npc_id"] and player["dialogue_options_pending"]:
-        npc_id = player["dialogue_npc_id"]
-        npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
-        
-        if full_command == "leave":
-            print(f"You end the conversation with {npc_data['name']}.")
-            player["dialogue_npc_id"] = None
-            player["dialogue_options_pending"] = {}
-            return True
-
-        chosen_option_data = player["dialogue_options_pending"].get(full_command) 
-        if chosen_option_data:
-            print(f"\n> {chosen_option_data['text']}") 
-            if chosen_option_data.get("response"):
-                print(f"{npc_data['name']} says: \"{chosen_option_data['response']}\"")
-            
-            if chosen_option_data.get("triggers_combat"):
-                player["dialogue_npc_id"] = None 
-                player["dialogue_options_pending"] = {}
-                start_combat(npc_id)
-            elif chosen_option_data.get("action_type") == "end_conversation":
-                player["dialogue_npc_id"] = None
-                player["dialogue_options_pending"] = {}
-        else:
-            print("Invalid choice. Please type the number of the option or 'leave'.")
-        return True 
-
-    if player["combat_target_id"]:
-        npc_id = player["combat_target_id"]
-        if npc_id not in locations[player["current_location_id"]]["npcs"]:
-            print(f"[Warning] Target {npc_id} seems to be gone. Ending combat.")
-            player["combat_target_id"] = None
-            return True 
-
-        npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
-        action_taken = False
-
-        if command == "attack":
-            damage = player["attack_power"]
-            npc_data["hp"] -= damage
-            print(f"You attack {npc_data['name']} for {damage} damage.")
-            if npc_data["hp"] <= 0:
-                handle_npc_defeat(npc_id)
-            action_taken = True
-        elif command == "special":
-            if not args: print("Which special move? (Specify the move like 'special power strike')")
-            else:
-                move_input = "_".join(args) 
-                if move_input in player["special_moves"]:
-                    if player["special_cooldowns"].get(move_input, 0) == 0:
-                        move_details = player["special_moves"][move_input]
-                        damage = int(player["attack_power"] * move_details["damage_multiplier"])
-                        npc_data["hp"] -= damage
-                        print(f"You use {move_details['name']} on {npc_data['name']} for {damage} damage!")
-                        player["special_cooldowns"][move_input] = move_details["cooldown_max"]
-                        if npc_data["hp"] <= 0:
-                            handle_npc_defeat(npc_id)
-                        action_taken = True
-                    else:
-                        print(f"{player['special_moves'][move_input]['name']} is on cooldown ({player['special_cooldowns'][move_input]} turns left).")
-                else:
-                    print(f"You don't know a special move called '{' '.join(args)}'.")
-        elif command == "deflect":
-            player["is_deflecting"] = True
-            print("You brace yourself, preparing to deflect the next attack.")
-            action_taken = True
-        elif command == "item":
-            if not args: print("Use which item?")
-            else:
-                item_name_input = " ".join(args)
-                item_id_to_use = None
-                for inv_item_id in player["inventory"]:
-                    if item_name_input == items_data.get(inv_item_id, {}).get("name", "").lower() or \
-                       item_name_input == inv_item_id.replace("_", " "):
-                        item_id_to_use = inv_item_id
-                        break
-                
-                if item_id_to_use:
-                    item_detail = items_data.get(item_id_to_use)
-                    if item_detail and item_detail["type"] == "consumable" and item_detail["effect"] == "heal":
-                        heal_amount = item_detail["amount"]
-                        player["hp"] = min(player["max_hp"], player["hp"] + heal_amount)
-                        player["inventory"].remove(item_id_to_use)
-                        print(f"You use the {item_detail['name']} and restore {heal_amount} HP. You now have {player['hp']}/{player['max_hp']} HP.")
-                        action_taken = True 
-                    else:
-                        print(f"You can't use the {item_name_input} in that way right now.")
-                else:
-                    print(f"You don't have a '{item_name_input}'.")
-        else:
-            print(f"Unknown combat command: '{command}'. Valid commands: attack, special, deflect, item.")
-
-        if action_taken and player["combat_target_id"] and player["game_active"]: 
-            npc_combat_turn()
-        return True 
-
-    loc_id = player["current_location_id"]
-    location_data = locations[loc_id]
-
-    if command == "!map" or (command == "view" and " ".join(args) == "map scroll"): # Allow "view map scroll"
-        if command == "view" and "blank_map_scroll" not in player["inventory"]:
-            print("You don't have a map scroll to view.")
-            return True
-        if command == "view":
-            print("You unfurl the map scroll...")
-
-        map_lines_for_terminal = draw_zone_map(loc_id)
-        for line in map_lines_for_terminal:
-            print(line)
-    elif command == "look": print("\nYou take a closer look around...")
-    elif command == "go":
-        if not args: print("Go where? (Specify a direction like 'go north')")
-        else:
-            direction = args[0]
-            if direction in location_data.get("exits", {}):
-                player["current_location_id"] = location_data["exits"][direction]
-                print(f"You walk {direction}.")
-            else: print(f"You can't go {direction} from here.")
-    elif command == "open" and " ".join(args) == "worn crate": # Specific for starter task
-        if player["current_location_id"] == "generic_start_room":
-            crate = locations["generic_start_room"]["features"]["worn_crate"]
-            if crate["closed"]:
-                # Use the environmental interaction handler for consistency
-                handle_environmental_interaction("worn_crate", "open")
-            else:
-                print("The crate is already open and empty.")
-        else:
-            print("There is no worn crate here to open.")
-    elif command == "take":
-        if not args: print("Take what?")
-        else:
-            # This 'take' command logic should now work for items revealed from the crate
-            item_name_input = " ".join(args)
-            item_to_take = None
-            room_items = location_data.get("items", [])
-            for r_item_id in list(room_items): 
-                # Check if the item is a "Small Pouch of Coins" to handle currency gain
-                if r_item_id == "small_pouch_of_coins" and (item_name_input == items_data.get(r_item_id, {}).get("name","").lower() or item_name_input == r_item_id.replace("_", " ")):
-                    coin_value = items_data.get(r_item_id, {}).get("value", 0)
-                    # Here you would add to a player's currency attribute if you have one, e.g., player["coins"] += coin_value
-                    log_game_event("currency_gained", {"amount": coin_value, "source": f"take_room_{loc_id}_{r_item_id}", "item_id_source": r_item_id, "location_id": loc_id})
-                    print(f"You picked up the {items_data.get(r_item_id, {}).get('name', r_item_id)} and gained {coin_value} coins.")
-                    room_items.remove(r_item_id)
-                    item_to_take = "currency_handled" # Special flag to skip award_item_to_player
-                    break
-                if item_name_input == items_data.get(r_item_id, {}).get("name","").lower() or \
-                   item_name_input == r_item_id.replace("_", " "):
-                    item_to_take = r_item_id
-                    break
-            if item_to_take: # item_id_to_take was a typo, should be item_to_take
-                award_item_to_player(item_to_take, source=f"take_room_{loc_id}") # award_item_to_player now prints
-                room_items.remove(item_to_take)
-            elif item_to_take != "currency_handled": # Only print if not handled as currency and not found
-                print(f"There is no {item_name_input} here to take.")
-    elif command == "inventory" or command == "i":
-        if player["inventory"]:
-            print("\nYou are carrying:")
-            for item_id in player["inventory"]: print(f"  - {items_data.get(item_id, {}).get('name', item_id.replace('_',' '))}")
-        else: print("Your inventory is empty.")
-    elif command == "use":
-        if len(args) < 3 or args[1] != "on": print("How to use: 'use <item_name> on <target_name>'")
-        else:
-            item_input = args[0]
-            target_input = args[2]
-            item_in_inv_id = next((inv_id for inv_id in player["inventory"] if item_input == items_data.get(inv_id,{}).get("name","").lower() or item_input == inv_id.replace("_"," ")), None)
-            target_feature_id = next((f_id for f_id in location_data.get("features",{}).keys() if target_input == f_id.replace("_"," ")), None)
-
-            if not item_in_inv_id: print(f"You don't have a {item_input}.")
-            elif not target_feature_id: print(f"There is no {target_input} here to use the {item_input} on.")
-            else:
-                feature = location_data["features"][target_feature_id]
-                if feature.get("locked") and feature.get("key_needed") == item_in_inv_id:
-                    print(feature["unlock_message"])
-                    feature["locked"] = False
-                    remove_item_from_player_inventory(item_in_inv_id, source=f"used_on_{target_feature_id}")
-                    if "contains_item_on_unlock" in feature:
-                        new_item = feature.pop("contains_item_on_unlock")
-                        location_data.setdefault("items", []).append(new_item)
-                        # Log item revealed from a locked feature
-                        log_game_event("feature_item_revealed", {
-                            "feature_id": target_feature_id,
-                            "revealed_item_id": new_item,
-                            "location_id": player.get("current_location_id")
-                        })
-                        print(f"The {target_feature_id.replace('_', ' ')} creaks open. You see a {items_data.get(new_item,{}).get('name',new_item)} inside!")
-                elif not feature.get("locked"): print(f"The {target_feature_id.replace('_', ' ')} is already unlocked/used.")
-                else: print(f"The {item_input} doesn't seem to work on the {target_feature_id.replace('_', ' ')}.")
-    elif command == "talk":
-        if not args: print("Talk to whom?")
-        else:
-            npc_name_input = " ".join(args)
-            room_npcs = location_data.get("npcs", {})
-            found_npc_id, npc_data_found = next(((npc_id, data) for npc_id, data in room_npcs.items() if npc_name_input == data["name"].lower() or npc_name_input == npc_id.lower()), (None, None))
-
-            if npc_data_found:
-                print(f"\nYou approach {npc_data_found['name']}.")
-                if npc_data_found.get("pre_combat_dialogue") and npc_data_found.get("dialogue_options"):
-                    print(f"{npc_data_found['name']} says: \"{npc_data_found['pre_combat_dialogue']}\"")
-                    player["dialogue_npc_id"] = found_npc_id
-                    player["dialogue_options_pending"] = npc_data_found["dialogue_options"]
-                elif npc_data_found.get("type") == "quest_giver_simple":
-                    if npc_data_found.get("quest_item_needed") in player["inventory"]:
-                        print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_complete', 'Thank you!')}\"")
-                        remove_item_from_player_inventory(npc_data_found["quest_item_needed"], source=f"quest_turn_in_{found_npc_id}")
-                        if npc_data_found.get("quest_reward_item"):
-                            # award_item_to_player is already called and logs "item_acquisition"
-                            # which covers "player is rewarded with"
-                            award_item_to_player(npc_data_found["quest_reward_item"], source=f"quest_reward_{found_npc_id}")
-                        # If there's a currency reward for the quest
-                        if npc_data_found.get("quest_reward_currency"):
-                            log_game_event("currency_gained", {"amount": npc_data_found["quest_reward_currency"], "source": f"quest_reward_{found_npc_id}", "location_id": loc_id})
-                            print(f"You are also rewarded with {npc_data_found['quest_reward_currency']} coins.")
-                    else:
-                        print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_incomplete', npc_data_found['dialogue'])}\"")
-                elif npc_data_found.get("hostile"): 
-                    print(npc_data_found['dialogue']) 
-                    start_combat(found_npc_id) 
-                elif npc_data_found.get("type") == "vendor":
-                    print(VENDOR_STALL_VISUAL)
-                    print(f"{npc_data_found['name']} says: \"{npc_data_found['dialogue']}\"")
-                else:
-                    print(f"{npc_data_found['name']} says: \"{npc_data_found['dialogue']}\"")
-            else:
-                print(f"There is no one named '{npc_name_input}' here to talk to.")
-    else:
-        potential_verb = command
-        potential_target = " ".join(args)
-        target_feature_id = None
-        for f_id in location_data.get("features", {}).keys():
-            if potential_target == f_id.replace("_", " "):
-                target_feature_id = f_id
-                break
-        if target_feature_id and potential_verb in location_data["features"][target_feature_id].get("actions", {}):
-            handle_environmental_interaction(target_feature_id, potential_verb)
-        else:
-            print(f"I don't understand '{full_command}'. Try 'look' or check commands.")
-    return True
-
-def main_game_loop():
-    if not player["game_active"]:
-        show_current_scene() # Shows initial welcome
-    else:
-        show_current_scene() # Shows the scene for the current location if game is active
-
-    while True:
-        prompt_text = "> "
-        if player["game_active"]:
-            if player["dialogue_npc_id"] and player["dialogue_options_pending"]:
-                prompt_text = "[DIALOGUE] > "
-            elif player["combat_target_id"]:
-                prompt_text = "[COMBAT] > "
-            elif player["current_location_id"] and player["current_location_id"] in locations:
-                loc_name = locations[player["current_location_id"]]["name"]
-                prompt_text = f"[{loc_name}] > "
-            else: 
-                # This case should ideally not be reached if game_active is true and character creation sets a location
-                print("[Error: Current location unknown, but game is active. Resetting to start room.]")
-                player["current_location_id"] = "generic_start_room" 
-        
-        user_input = input(prompt_text)
-        if not process_command(user_input): break 
-        
-        if player["game_active"]: 
-            show_current_scene()
-        elif not player["game_active"] and player["combat_target_id"] is None and player["dialogue_npc_id"] is None : 
-             # Game ended not due to combat/dialogue, or character creation was cancelled
-             break 
-
-if __name__ == "__main__":
-    auto_start_game = False
-    start_browser_on_launch = False
-    run_character_creation_on_start = True 
-    
-    if "--autostart" in sys.argv:
-        auto_start_game = True
-    if "--browser" in sys.argv:
-        start_browser_on_launch = True
-
-    # --- Character Selection / Creation for Terminal ---
-    if not start_browser_on_launch:
-        existing_chars = list_existing_characters()
-        if existing_chars and not auto_start_game: # Don't show selection if autostarting
-            print("\n--- Welcome to Adventure of Textland ---")
-            options = {}
-            current_option = 1
-            print("Choose an option:")
-            for char_data in existing_chars:
-                print(f"  {current_option}. Load: {char_data['display_name']} ({char_data['species']} {char_data['class']})")
-                options[str(current_option)] = ("load", char_data['display_name'])
-                current_option += 1
-            
-            print(f"  {current_option}. Create New Character")
-            options[str(current_option)] = ("new", None)
-            current_option +=1 # For delete option start
-
-            if existing_chars: # Only show delete if there are characters
-                print(f"  ---") # Separator
-                for i, char_data in enumerate(existing_chars):
-                    print(f"  {current_option + i}. Delete: {char_data['display_name']}")
-                    options[str(current_option + i)] = ("delete", char_data['display_name'])
-            
-            choice_made = False
-            while not choice_made:
-                try:
-                    selection_str = input("Enter your choice: ").strip()
-                    if selection_str in options:
-                        action, char_name_for_action = options[selection_str]
-                        if action == "load":
-                            if load_character_data(char_name_for_action):
-                                choice_made = True
-                        elif action == "new":
-                            initialize_game_state()
-                            choice_made = True
-                        elif action == "delete":
-                            confirm_delete = input(f"Are you sure you want to permanently delete '{char_name_for_action}'? This cannot be undone. (yes/no): ").strip().lower()
-                            if confirm_delete == 'yes':
-                                delete_character_data(char_name_for_action)
-                            # After delete attempt, re-list or exit to main menu (for now, just breaks to re-run script for updated list)
-                            print("Please restart to see updated character list after deletion.")
-                            sys.exit() # Exit script to force a clean re-list on next run
-                    else:
-                        print("Invalid selection.")
-                except ValueError:
-                    print("Please enter a number.")
-        elif auto_start_game and existing_chars:
-             print(f"Autostarting with first available character: {existing_chars[0]['display_name']}")
-             load_character_data(existing_chars[0]['display_name']) # Or implement a "last played" logic
-        else: # No existing characters or autostart with no characters
-            if run_character_creation_on_start or auto_start_game:
-                initialize_game_state()
-    
-    # Launch browser if requested AND if Flask is available
-    if start_browser_on_launch:
-        if flask_available:
-            launch_web_interface() # The web interface will handle its own character creation flow
-        else:
-            print("\n[INFO] Flask library not found. Cannot start browser interface automatically.")
-            print("       Please install Flask (e.g., 'pip install Flask') and run with --browser again.")
-            print("       If Flask is not installed, the game will proceed in terminal mode if possible.")
-            # If Flask isn't available and browser was requested, we might still want to run terminal CC if autostart was also set.
-            if auto_start_game and not player["game_active"]: # If autostart was set and game hasn't started
-                 initialize_game_state()
-
-    main_game_loop()
