@@ -1538,45 +1538,59 @@ def run_minimal_web_server():
                     console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); // Log the data object
                     const outputElement = document.getElementById('game-output');
 
-                    // --- Inventory Modal Handling ---
-                    if (actionStringEcho === 'inventory') {
-                        let inventoryContent = "<p>Your inventory is empty.</p>"; // Default message for modal
-                        if (data.inventory_list && data.inventory_list.length > 0) {
-                            inventoryContent = '<div style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">'; // 6x8 grid
-                            const totalSlots = 48; // 6 rows * 8 columns
+                    // Helper function to render or update the backpack grid within the modal
+                    function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
+                        const modalGridContainer = document.getElementById('modal-backpack-grid');
+                        if (!modalGridContainer) return; // Modal or grid not found
 
-                            for (let i = 0; i < totalSlots; i++) {
-                                if (i < data.inventory_list.length) {
-                                    const item = data.inventory_list[i]; // item is an object {id, name, type, equip_slot}
-                                    let slotHTML = `<div class="inventory-slot" title="${item.name}" data-item-id="${item.id}"`;
-                                    if (item.equip_slot) { // Mark equippable items visually
-                                        slotHTML += ` style="border-color: #007bff;"`; // Example: blue border for equippable
-                                    }
-                                    slotHTML += `>${item.name}</div>`;
-                                    inventoryContent += slotHTML;
-                                } else {
-                                    inventoryContent += `<div class="inventory-slot">&nbsp;</div>`; // Empty slot
+                        let gridHTML = '';
+                        const totalSlots = 48; // 6 rows * 8 columns
+                        for (let i = 0; i < totalSlots; i++) {
+                            if (i < itemsToDisplay.length) {
+                                const item = itemsToDisplay[i]; // item is an object {id, name, type, equip_slot}
+                                let slotHTML = `<div class="inventory-slot" title="${item.name}" data-item-id="${item.id}"`;
+                                if (item.equip_slot) { // Mark equippable items visually
+                                    slotHTML += ` style="border-color: #007bff;"`; // Example: blue border for equippable
                                 }
+                                slotHTML += `>${item.name}</div>`;
+                                gridHTML += slotHTML;
+                            } else {
+                                gridHTML += `<div class="inventory-slot">&nbsp;</div>`; // Empty slot
                             }
-
-                            inventoryContent += '</div>';
                         }
-                        showMenuModal("Backpack", inventoryContent, [{text: "Close", action: () => {}}]);
-                        data.message = ""; // Clear any default message like "Your inventory is empty" from main output
-                    }
-                    // After modal is shown (or would have been shown), add event listeners if it was inventory
-                    // Check if the modal content element exists, which indicates the modal is currently displayed
-                    if (actionStringEcho === 'inventory' && document.getElementById('custom-modal-content')) {
-                        const inventorySlotsInModal = document.getElementById('custom-modal-content').querySelectorAll('.inventory-slot');
-                        inventorySlotsInModal.forEach(slotElement => {
+                        modalGridContainer.innerHTML = gridHTML;
+
+                        // Re-attach double-click listeners to the newly rendered items in the modal
+                        modalGridContainer.querySelectorAll('.inventory-slot[data-item-id]').forEach(slotElement => {
                             slotElement.addEventListener('dblclick', function(event) {
-                                event.preventDefault(); // Prevent default text selection on double-click
+                                event.preventDefault(); 
                                 const itemId = this.getAttribute('data-item-id');
-                                console.log("Double-clicked item ID:", itemId);
                                 performAction(`equip ${itemId}`);
-                                closeModal(); // Close backpack after attempting to equip
+                                closeModal(); 
                             });
                         });
+                    }
+
+                    // --- Inventory Modal Handling ---
+                    if (actionStringEcho === 'inventory') {
+                        let sortButtonHTML = `<div style="margin-bottom: 10px;"><button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button></div>`;
+                        
+                        // Create an empty container for the grid initially. It will be populated by renderOrUpdateModalBackpackGrid.
+                        let inventoryGridHTML = '<div id="modal-backpack-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">';
+                        if (data.inventory_list && data.inventory_list.length > 0) {
+                            inventoryGridHTML += '</div>';
+                        } else {
+                            inventoryGridHTML = "<p>Your inventory is empty.</p>"; // Keep this if no items
+                        }
+                        // Combine sort button and grid for the modal message
+                        let modalDisplayContent = sortButtonHTML + inventoryGridHTML;
+                        showMenuModal("Backpack", modalDisplayContent, [{text: "Close", action: () => {}}]);
+                        data.message = ""; // Clear any default message like "Your inventory is empty" from main output
+
+                        // Populate the grid if inventory_list is available
+                        if (data.inventory_list && data.inventory_list.length > 0) {
+                            renderOrUpdateModalBackpackGrid(data.inventory_list);
+                        }
                     }
                     // --- End Inventory Modal Handling ---
 
@@ -1599,6 +1613,16 @@ def run_minimal_web_server():
                         if(data.message && data.message.trim() !== "") p_message.textContent = data.message; 
                         outputElement.appendChild(p_message);
                         
+                        // --- Dynamic Update for Sort Action ---
+                        if (actionStringEcho === 'sort_inventory_by_id_action' && data.inventory_list) {
+                            const modalGrid = document.getElementById('modal-backpack-grid');
+                            // Check if the modal is actually visible (custom-modal-overlay exists)
+                            if (modalGrid && document.getElementById('custom-modal-overlay')) {
+                                renderOrUpdateModalBackpackGrid(data.inventory_list);
+                            }
+                        }
+                        // --- End Dynamic Update for Sort Action ---
+
                         function formatGSBCurrency(totalCopper) {
                             if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
                             if (totalCopper === 0) return "0🟠";
@@ -2048,6 +2072,27 @@ def run_minimal_web_server():
             current_loc_id_for_equip = player.get("current_location_id")
             game_response["location_name"] = locations.get(current_loc_id_for_equip, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_equip, {}).get("description", "An unfamiliar place.")
+        elif action == 'sort_inventory_by_id_action':
+            if player.get("inventory"):
+                player["inventory"].sort() # Sorts the list of item IDs alphabetically
+                game_response["message"] = "Inventory sorted by ID."
+                # CRITICAL: Repopulate inventory_list for the response so the UI can update dynamically
+                player_inventory_sorted = player.get("inventory", [])
+                game_response["inventory_list"] = [
+                    {
+                        "id": item_id,
+                        "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " ")),
+                        "type": items_data.get(item_id, {}).get("type"),
+                        "equip_slot": items_data.get(item_id, {}).get("equip_slot")
+                    }
+                    for item_id in player_inventory_sorted
+                ]
+            else:
+                game_response["message"] = "Inventory is empty, nothing to sort."
+            # Ensure current location data is still part of the response for context
+            current_loc_id_for_sort = player.get("current_location_id")
+            game_response["location_name"] = locations.get(current_loc_id_for_sort, {}).get("name", "Unknown Area")
+            game_response["description"] = locations.get(current_loc_id_for_sort, {}).get("description", "An unfamiliar place.")
         else:
             game_response["message"] = f"The action '{action}' is not fully implemented or recognized for the browser interface yet."
             # Ensure location details are still sent for unrecognized actions
