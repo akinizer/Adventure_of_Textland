@@ -991,6 +991,25 @@ def run_minimal_web_server():
                 let chosenClass = null;
                 let gameIsPaused = false;
                 let gameIsActiveForInput = false; // True when game interface is shown
+                
+                 // Centralized pause/resume logic
+                function togglePauseGame() {
+                    // If modal is visible and related to pause, this call is to resume.
+                    // Otherwise, this call is to pause.
+                    if (gameIsPaused && document.getElementById('custom-modal-overlay') && document.getElementById('custom-modal-overlay').querySelector('h3').textContent === "Game Paused") {
+                        // Resuming game
+                        gameIsPaused = false;
+                        console.log("Game Resumed");
+                        closeModal();
+                    } else if (!gameIsPaused && gameIsActiveForInput) {
+                        // Pausing game
+                        gameIsPaused = true;
+                        console.log("Game Paused");
+                        showMenuModal("Game Paused", "The game is currently paused.", [
+                            {text: "Resume Game (P)", action: togglePauseGame } // Clicking Resume calls this again
+                        ]);
+                    }
+                }
 
                 // Simple Modal Logic
                 
@@ -1345,7 +1364,7 @@ def run_minimal_web_server():
                         
                         function formatGSBCurrency(totalCopper) {
                             if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
-                            if (totalCopper === 0) return "0c";
+                            if (totalCopper === 0) return "0🟠";
 
                             const COPPER_PER_SILVER = 100;
                             const SILVER_PER_GOLD = 100;
@@ -1363,9 +1382,9 @@ def run_minimal_web_server():
                             
                             // Always show copper if it's non-zero, or if gold and silver are both zero (to ensure "0c" or "Xc")
                             if (copper > 0 || (gold === 0 && silver === 0)) {
-                                parts.push(`${copper}🟠`); // Orange circle for Copper/Bronze
+                                parts.push(`${copper}🟠`); // Orange circle for Copper
                             }
-                            return parts.length > 0 ? parts.join(' ') : "0🟠"; // Fallback to "0" with copper/bronze circle
+                            return parts.length > 0 ? parts.join(' ') : "0🟠"; // Fallback to "0" with copper circle
                         }
 
                         // Update dynamic header
@@ -1474,7 +1493,14 @@ def run_minimal_web_server():
                     }
 
                     document.addEventListener('keydown', function(event) {
-                        if ((event.key === 'p' || event.key === 'P') && !event.repeat && gameIsActiveForInput) { // Only allow pause if game is active
+                         // If a modal is open (like the pause modal), generally let modal buttons or specific keys (like 'P' for unpausing) handle actions.
+                        // Prevent other game-related key actions if paused and modal is up.
+                        if (gameIsPaused && document.getElementById('custom-modal-overlay') && (event.key !== 'p' && event.key !== 'P')) {
+                            // console.log("Game paused, modal open. Key '" + event.key + "' interaction potentially blocked.");
+                            // You might add event.preventDefault() here if needed for specific keys,
+                            // but the main game actions are blocked by `performAction`'s check.
+                        }
+                        if ((event.key === 'p' || event.key === 'P') && !event.repeat && gameIsActiveForInput) {
                             togglePauseGame();
                         }
                     });
