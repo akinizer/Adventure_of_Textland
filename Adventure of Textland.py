@@ -1070,14 +1070,14 @@ def run_minimal_web_server():
                             </div>
                             <h5 style="margin-bottom: 5px; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 3px;">Equipment</h5>
                             <div id="char-panel-equipment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em;">
-                                <div id="char-panel-equip-head" class="equip-slot" title="Head">H: Empty</div>
-                                <div id="char-panel-equip-shoulders" class="equip-slot" title="Shoulders">S: Empty</div>
-                                <div id="char-panel-equip-chest" class="equip-slot" title="Chest">C: Empty</div>
-                                <div id="char-panel-equip-hands" class="equip-slot" title="Hands">G: Empty</div>
-                                <div id="char-panel-equip-legs" class="equip-slot" title="Legs">L: Empty</div>
-                                <div id="char-panel-equip-feet" class="equip-slot" title="Feet">F: Empty</div>
-                                <div id="char-panel-equip-main_hand" class="equip-slot" title="Main Hand">MH: Empty</div>
-                                <div id="char-panel-equip-off_hand" class="equip-slot" title="Off-Hand">OH: Empty</div>
+                                <div id="char-panel-equip-head" class="equip-slot" title="Head" data-slot-key="head">H: Empty</div>
+                                <div id="char-panel-equip-shoulders" class="equip-slot" title="Shoulders" data-slot-key="shoulders">S: Empty</div>
+                                <div id="char-panel-equip-chest" class="equip-slot" title="Chest" data-slot-key="chest">C: Empty</div>
+                                <div id="char-panel-equip-hands" class="equip-slot" title="Hands" data-slot-key="hands">G: Empty</div>
+                                <div id="char-panel-equip-legs" class="equip-slot" title="Legs" data-slot-key="legs">L: Empty</div>
+                                <div id="char-panel-equip-feet" class="equip-slot" title="Feet" data-slot-key="feet">F: Empty</div>
+                                <div id="char-panel-equip-main_hand" class="equip-slot" title="Main Hand" data-slot-key="main_hand">MH: Empty</div>
+                                <div id="char-panel-equip-off_hand" class="equip-slot" title="Off-Hand" data-slot-key="off_hand">OH: Empty</div>
                             </div>
 
                         </div>
@@ -1637,6 +1637,7 @@ def run_minimal_web_server():
                         const charPanelAttack = document.getElementById('char-panel-attack');
                         const charPanelCoins = document.getElementById('char-panel-coins');
                         // Equipment Slots
+                        const equipGrid = document.getElementById('char-panel-equipment-grid');
                         const equipSlots = {
                             head: document.getElementById('char-panel-equip-head'),
                             shoulders: document.getElementById('char-panel-equip-shoulders'),
@@ -1664,9 +1665,34 @@ def run_minimal_web_server():
                                 const itemName = data.player_equipment && data.player_equipment[slotKey] ? data.player_equipment[slotKey] : 'Empty';
                                 const prefix = equipSlotPrefixes[slotKey] || slotKey.substring(0,1).toUpperCase();
                                 equipSlots[slotKey].textContent = `${prefix}: ${itemName}`;
+
+                                // Store the item ID on the slot element if an item is equipped
+                                if (data.player_equipment && data.player_equipment[`${slotKey}_id`]) { // Assuming backend sends item_id as slotKey_id
+                                     equipSlots[slotKey].setAttribute('data-item-id', data.player_equipment[`${slotKey}_id`]);
+                                     equipSlots[slotKey].style.borderColor = '#007bff'; // Example: Highlight equipped slots
+                                } else {
+                                     equipSlots[slotKey].removeAttribute('data-item-id');
+                                     equipSlots[slotKey].style.borderColor = '#b0b0b0'; // Default border
+                                }
+
                             }
                         }
-
+                        // Add double-click listeners to equipped slots
+                        // Define the unequip double-click handler function within displaySceneData scope
+                        function handleUnequipDoubleClick(event) {
+                            event.preventDefault(); // Prevent default text selection on double-click
+                            const itemId = this.getAttribute('data-item-id');
+                            const slotKey = this.getAttribute('data-slot-key'); // Get the slot key
+                            console.log(`Double-clicked equipped item ID: ${itemId} in slot: ${slotKey}`);
+                            if (itemId) { // Only attempt to unequip if there's an item ID
+                                performAction(`unequip ${itemId}`); // Send the unequip command
+                            }
+                        }
+                        if (equipGrid) { // equipGrid is document.getElementById('char-panel-equipment-grid')
+                            equipGrid.querySelectorAll('.equip-slot[data-item-id]').forEach(slotElement => {
+                                slotElement.addEventListener('dblclick', handleUnequipDoubleClick);
+                            });
+                        }
 
                         if(data.map_lines && Array.isArray(data.map_lines)) { 
                             data.map_lines.forEach(line => {
@@ -1962,6 +1988,33 @@ def run_minimal_web_server():
                 player["flags"]["found_starter_items"] = True
             else:
                 game_response["message"] = "The crate is already open and empty."
+        elif action.startswith('unequip '):
+            item_id_to_unequip = action.split(' ', 1)[1]
+            # Find the item in equipped slots
+            item_id_found_in_equipment = None
+            slot_unequipped_from = None
+            player_equipment_data = player.get("equipment", {})
+            for slot, item_id in player_equipment_data.items():
+                if item_id == item_id_to_unequip: # Match by item ID
+                    item_id_found_in_equipment = item_id
+                    slot_unequipped_from = slot
+                    break
+
+            if item_id_found_in_equipment:
+                player["inventory"].append(item_id_found_in_equipment)
+                player["equipment"][slot_unequipped_from] = None
+                game_response["message"] = f"You unequipped {items_data.get(item_id_found_in_equipment,{}).get('name', item_id_found_in_equipment)} from your {slot_unequipped_from.replace('_', ' ')} slot."
+                log_game_event("item_unequipped", {"item_id": item_id_found_in_equipment, "slot": slot_unequipped_from, "moved_to_inventory": True})
+                # TODO: Adjust player stats based on unequipped item
+            else:
+                # This case might happen if the client state is out of sync or item wasn't equipped
+                game_response["message"] = f"That item doesn't seem to be equipped."
+            
+            # Ensure current location data is still part of the response
+            current_loc_id_for_unequip = player.get("current_location_id")
+            game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
+            game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.")
+
         elif action.startswith('equip '):
             item_id_to_equip = action.split(' ', 1)[1]
             if item_id_to_equip in player.get("inventory", []):
@@ -2052,7 +2105,11 @@ def run_minimal_web_server():
         # Ensure all defined slots are present in the response
         expected_slots = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
         for slot in expected_slots:
-            item_id = player_equipment_data.get(slot) # Get item_id for the current slot
+            item_id = player_equipment_data.get(slot) # Get item_id from player's equipment dict
+
+            # Send both the item name and the item ID for the frontend
+            if item_id:
+                 game_response["player_equipment"][f"{slot}_id"] = item_id # Send item ID
             if item_id and item_id in items_data:
                 game_response["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
             else:
@@ -2154,7 +2211,11 @@ def run_minimal_web_server():
             player_equipment_data_init = player.get("equipment", {})
             expected_slots_init = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
             for slot in expected_slots_init:
-                item_id = player_equipment_data_init.get(slot)
+                item_id = player_equipment_data_init.get(slot) # Get item_id from player's equipment dict
+
+                # Send both the item name and the item ID for the frontend
+                if item_id:
+                     initial_scene_data["player_equipment"][f"{slot}_id"] = item_id # Send item ID
                 if item_id and item_id in items_data:
                     initial_scene_data["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
 
@@ -2219,7 +2280,11 @@ def run_minimal_web_server():
             player_equipment_data_load = player.get("equipment", {})
             expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
             for slot in expected_slots_load:
-                item_id = player_equipment_data_load.get(slot)
+                item_id = player_equipment_data_load.get(slot) # Get item_id from player's equipment dict
+
+                # Send both the item name and the item ID for the frontend
+                if item_id:
+                     loaded_scene_data["player_equipment"][f"{slot}_id"] = item_id # Send item ID
                 if item_id and item_id in items_data:
                     loaded_scene_data["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
             return jsonify(loaded_scene_data)
@@ -2273,7 +2338,10 @@ def run_minimal_web_server():
             player_equipment_data_resume = player.get("equipment", {})
             expected_slots_resume = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
             for slot in expected_slots_resume:
-                item_id = player_equipment_data_resume.get(slot)
+                item_id = player_equipment_data_resume.get(slot) # Get item_id from player's equipment dict
+                # Send both the item name and the item ID for the frontend
+                if item_id:
+                     scene_data["player_equipment"][f"{slot}_id"] = item_id # Send item ID
                 if item_id and item_id in items_data:
                     scene_data["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
             return jsonify(scene_data)
@@ -2637,6 +2705,34 @@ def process_command(full_command_input):
                     print(f"You don't have a '{item_name_input}'.")
         else:
             print(f"Unknown combat command: '{command}'. Valid commands: attack, special, deflect, item.")
+        
+        # After player action in combat, check if combat should continue (NPC still alive)
+        if action_taken and player["combat_target_id"] and player["game_active"]: 
+            npc_combat_turn()
+        return True 
+
+    # --- New Unequip Command Handler (Terminal) ---
+    # This is a basic terminal handler. The web handler is separate.
+    elif command == "unequip":
+        if not args: print("Unequip what? (Specify the item name)")
+        else:
+            item_name_input = " ".join(args)
+            # Find the item in equipped slots
+            item_id_to_unequip = None
+            slot_unequipped_from = None
+            for slot, item_id in player.get("equipment", {}).items():
+                if item_id and (item_name_input == items_data.get(item_id, {}).get("name", "").lower() or item_name_input == item_id.replace("_", " ")):
+                    item_id_to_unequip = item_id
+                    slot_unequipped_from = slot
+                    break
+            if item_id_to_unequip:
+                player["inventory"].append(item_id_to_unequip)
+                player["equipment"][slot_unequipped_from] = None
+                print(f"You unequipped {items_data.get(item_id_to_unequip,{}).get('name', item_id_to_unequip)} from your {slot_unequipped_from.replace('_', ' ')} slot.")
+            else:
+                print(f"You don't have '{item_name_input}' equipped.")
+        return True # Command processed, show scene again
+    # --- End Unequip Command Handler (Terminal) ---
 
         if action_taken and player["combat_target_id"] and player["game_active"]: 
             npc_combat_turn()
