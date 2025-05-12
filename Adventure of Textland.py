@@ -429,6 +429,8 @@ player = {
     "flags": {},
     "coins": 0, # Player's currency
     "level": 1, # Player's level
+    "xp": 0, # Player's experience points
+    "xp_to_next_level": 100, # XP needed for the next level
     "is_paused": False # New flag for game pause state
 }
 
@@ -721,6 +723,8 @@ def _apply_character_choices_and_stats(species_id, class_id, char_name, char_gen
     player["inventory"] = ["simple_knife", "blank_map_scroll"] 
     player["coins"] = 0 # Initialize coins
     player["level"] = 1 # Initialize level
+    player["xp"] = 0
+    player["xp_to_next_level"] = 100 # Initial XP for level 2
     player["flags"] = {} # Reset flags for a new character
 
     print(f"\nCharacter '{player['name']}' ({player['gender']} {species_info['name']} {class_info['name']}) created!")
@@ -774,6 +778,31 @@ def handle_player_defeat():
     player["dialogue_options_pending"] = {}
     player["combat_target_id"] = None
 
+def award_xp(amount):
+    """Awards XP to the player and checks for level up."""
+    if not player["game_active"]:
+        return
+
+    player["xp"] += amount
+    print(f"You gained {amount} XP.")
+    log_game_event("xp_gained", {"amount": amount, "current_xp": player["xp"], "level": player["level"]})
+
+    while player["xp"] >= player["xp_to_next_level"]:
+        player["level"] += 1
+        player["xp"] -= player["xp_to_next_level"] # Subtract XP used for this level
+        # Increase XP needed for the *next* level (e.g., 50% more than previous)
+        player["xp_to_next_level"] = int(player["xp_to_next_level"] * 1.5) 
+        
+        # Apply level-up bonuses (example)
+        player["max_hp"] += 10
+        player["hp"] = player["max_hp"] # Full heal on level up
+        player["attack_power"] += 2
+
+        print(f"\n*** LEVEL UP! You are now Level {player['level']}! ***")
+        print(f"Max HP increased to {player['max_hp']}. Attack Power increased to {player['attack_power']}.")
+        print(f"XP to next level: {player['xp_to_next_level']}. Current XP: {player['xp']}.")
+        log_game_event("level_up", {"new_level": player["level"], "max_hp": player["max_hp"], "attack_power": player["attack_power"]})
+
 def handle_npc_defeat(npc_id):
     current_loc_data = locations[player["current_location_id"]]
     npc_data = current_loc_data["npcs"][npc_id]
@@ -794,6 +823,10 @@ def handle_npc_defeat(npc_id):
         for item_id in npc_data["loot"]:
             current_loc_data.setdefault("items", []).append(item_id)
             print(f"{npc_data['name']} dropped a {items_data.get(item_id, {}).get('name', item_id)}!")
+    
+    # Award XP for defeating NPC
+    xp_reward = npc_data.get("xp_reward", 25) # Default XP or define in NPC data
+    award_xp(xp_reward)
 
     del current_loc_data["npcs"][npc_id]
     player["combat_target_id"] = None 
@@ -1481,7 +1514,7 @@ def run_minimal_web_server():
                         if (headerInfoDiv) {
                             // Ensure header is visible only when game interface is active
                             headerInfoDiv.style.display = document.getElementById('game-interface').style.display === 'block' ? 'block' : 'none';
-                            headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Player: ${data.player_name || 'Adventurer'} - Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} - Coins: ${formatGSBCurrency(data.player_coins)} - Diamond: 0💎`;
+                            headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Player: ${data.player_name || 'Adventurer'} - Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} (XP: ${data.player_xp !== undefined ? data.player_xp : 'N/A'}/${data.player_xp_to_next_level !== undefined ? data.player_xp_to_next_level : 'N/A'}) - Coins: ${formatGSBCurrency(data.player_coins)} - Diamond: 0💎`;
                         }
                         if(data.map_lines && Array.isArray(data.map_lines)) { 
                             data.map_lines.forEach(line => {
@@ -1657,6 +1690,8 @@ def run_minimal_web_server():
             "description": "An unfamiliar place.", # Default
             "player_coins": player.get("coins", 0),
             "player_level": player.get("level", 1),
+            "player_xp": player.get("xp", 0),
+            "player_xp_to_next_level": player.get("xp_to_next_level", 100),
             "interactable_features": [], 
             "room_items": [], # List of items in the room
             "can_save_in_city": False # Default save status
@@ -1810,6 +1845,8 @@ def run_minimal_web_server():
         game_response["player_name"] = player.get("name")
         game_response["player_coins"] = player.get("coins", 0)
         game_response["player_level"] = player.get("level", 1)
+        game_response["player_xp"] = player.get("xp", 0)
+        game_response["player_xp_to_next_level"] = player.get("xp_to_next_level", 100)
 
         # Determine if saving is allowed
         current_zone_for_save = current_location_data_for_response.get("zone")
@@ -1879,6 +1916,8 @@ def run_minimal_web_server():
                 "description": locations.get(player["current_location_id"], {}).get("description"),
                 "player_coins": player.get("coins", 0),
                 "player_level": player.get("level", 1),
+                "player_xp": player.get("xp", 0),
+                "player_xp_to_next_level": player.get("xp_to_next_level", 100),
                 "interactable_features": [], # Will be populated by final assembly logic
                 "room_items": [] # Will be populated by final assembly logic
             }
@@ -1923,6 +1962,8 @@ def run_minimal_web_server():
                 "description": current_loc_data.get("description"),
                 "player_coins": player.get("coins", 0),
                 "player_level": player.get("level", 1),
+                "player_xp": player.get("xp", 0),
+                "player_xp_to_next_level": player.get("xp_to_next_level", 100),
                 "interactable_features": [],
                 "room_items": []
             }
@@ -1965,6 +2006,8 @@ def run_minimal_web_server():
                 "description": current_loc_data.get("description"),
                 "player_coins": player.get("coins", 0),
                 "player_level": player.get("level", 1),
+                "player_xp": player.get("xp", 0),
+                "player_xp_to_next_level": player.get("xp_to_next_level", 100),
                 "interactable_features": [], # Populate these like in process_game_action
                 "room_items": []
             }
