@@ -1343,12 +1343,37 @@ def run_minimal_web_server():
                         if(data.message && data.message.trim() !== "") p_message.textContent = data.message; 
                         outputElement.appendChild(p_message);
                         
+                        function formatGSBCurrency(totalCopper) {
+                            if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
+                            if (totalCopper === 0) return "0c";
+
+                            const COPPER_PER_SILVER = 100;
+                            const SILVER_PER_GOLD = 100;
+                            const COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
+
+                            let gold = Math.floor(totalCopper / COPPER_PER_GOLD);
+                            let remainingCopperAfterGold = totalCopper % COPPER_PER_GOLD;
+
+                            let silver = Math.floor(remainingCopperAfterGold / COPPER_PER_SILVER);
+                            let copper = remainingCopperAfterGold % COPPER_PER_SILVER;
+
+                            let parts = [];
+                            if (gold > 0) parts.push(`${gold}🟡`); 
+                            if (silver > 0) parts.push(`${silver}🔘`); // Gray circle for Silver
+                            
+                            // Always show copper if it's non-zero, or if gold and silver are both zero (to ensure "0c" or "Xc")
+                            if (copper > 0 || (gold === 0 && silver === 0)) {
+                                parts.push(`${copper}🟠`); // Orange circle for Copper/Bronze
+                            }
+                            return parts.length > 0 ? parts.join(' ') : "0🟠"; // Fallback to "0" with copper/bronze circle
+                        }
+
                         // Update dynamic header
                         const headerInfoDiv = document.getElementById('dynamic-header-info');
                         if (headerInfoDiv) {
                             // Ensure header is visible only when game interface is active
                             headerInfoDiv.style.display = document.getElementById('game-interface').style.display === 'block' ? 'block' : 'none';
-                            headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Coins: ${data.player_coins !== undefined ? data.player_coins : 'N/A'} | Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} | Player: ${data.player_name || 'Adventurer'}`;
+                            headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Player: ${data.player_name || 'Adventurer'} - Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} - Coins: ${formatGSBCurrency(data.player_coins)} - Diamond: 0💎`;
                         }
                         if(data.map_lines && Array.isArray(data.map_lines)) { 
                             data.map_lines.forEach(line => {
@@ -1569,8 +1594,8 @@ def run_minimal_web_server():
                 if item_id_to_take == "small_pouch_of_coins":
                     coin_value = items_data.get(item_id_to_take, {}).get("value", 0)
                     player["coins"] = player.get("coins", 0) + coin_value 
-                    log_game_event("currency_gained", {"amount": coin_value, "source": f"take_room_web_{current_loc_id}_{item_id_to_take}", "item_id_source": item_id_to_take, "location_id": current_loc_id})
-                    game_response["message"] = f"You picked up the {items_data.get(item_id_to_take, {}).get('name', item_id_to_take)} and gained {coin_value} coins."
+                    log_game_event("currency_gained", {"amount": coin_value, "unit": "copper", "source": f"take_room_web_{current_loc_id}_{item_id_to_take}", "item_id_source": item_id_to_take, "location_id": current_loc_id})
+                    game_response["message"] = f"You picked up the {items_data.get(item_id_to_take, {}).get('name', item_id_to_take)} and gained {coin_value} copper coins."
                     room_items.remove(item_id_to_take)
                 else:
                     award_message = award_item_to_player(item_id_to_take, source=f"take_room_web_{current_loc_id}")
@@ -2199,8 +2224,8 @@ def process_command(full_command_input):
                     if r_item_id == "small_pouch_of_coins":
                         coin_value = item_data.get("value", 0)
                         player["coins"] = player.get("coins", 0) + coin_value 
-                        log_game_event("currency_gained", {"amount": coin_value, "source": f"take_room_{loc_id}_{r_item_id}", "item_id_source": r_item_id, "location_id": loc_id})
-                        print(f"You picked up the {item_data.get('name', r_item_id)} and gained {coin_value} coins.")
+                        log_game_event("currency_gained", {"amount": coin_value, "unit": "copper", "source": f"take_room_{loc_id}_{r_item_id}", "item_id_source": r_item_id, "location_id": loc_id})
+                        print(f"You picked up the {item_data.get('name', r_item_id)} and gained {coin_value} copper coins.")
                         room_items.remove(r_item_id) # Remove from the original list
                         item_to_take = "currency_handled" 
                         break 
