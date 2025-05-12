@@ -968,10 +968,10 @@ def run_minimal_web_server():
                     </div>
                     <div class="actions-panel dynamic-options">
                         <p><strong>Interactions:</strong> (Would show available items/NPCs/features)</p>
-                        <!-- Generic 'Take Item' button removed as dynamic buttons are now generated -->
+                        <!-- "Search Feature" button removed as it's handled by the dynamic feature-interactions-panel -->
+                        <!-- Consider if "Talk to NPC" and "Use Item On..." are still needed as placeholders -->
                         <button onclick="performAction('talk <npc_example>')">Talk to NPC</button>
                         <button onclick="performAction('use <item> on <feature>')">Use Item On...</button>
-                        <button onclick="performAction('search <feature>')">Search Feature</button>
                     </div>
                     <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
                 </div>
@@ -1652,20 +1652,20 @@ def run_minimal_web_server():
         game_response["interactable_features"] = [] # Start fresh
         features_in_room_for_response = current_location_data_for_response.get("features", {})
         for f_id, f_data in features_in_room_for_response.items():
-            primary_action = None
             if f_id == "worn_crate":
                 if f_data.get("closed") and "open" in f_data.get("actions", {}):
-                    primary_action = "open"
-                # else: # Crate is open, could check for other actions like 'search empty_crate'
-            elif f_data.get("actions"):
-                primary_action = list(f_data["actions"].keys())[0]
-
-            if primary_action:
-                game_response["interactable_features"].append({
-                    "id": f_id,
-                    "name": f_id.replace("_", " ").capitalize(),
-                    "action": primary_action
-                })
+                    game_response["interactable_features"].append({
+                        "id": f_id,
+                        "name": f_id.replace("_", " ").capitalize(),
+                        "action": "open"
+                    })
+            elif f_data.get("actions"): # For other features, iterate through all their actions
+                for action_verb in f_data["actions"].keys():
+                    game_response["interactable_features"].append({
+                        "id": f_id,
+                        "name": f_id.replace("_", " ").capitalize(),
+                        "action": action_verb
+                    })
 
         # Populate room items
         room_items_for_response = current_location_data_for_response.get("items", [])
