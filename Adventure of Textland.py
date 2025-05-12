@@ -350,18 +350,18 @@ BASE_ITEMS_DATA = {
     "strange_berries": {"name": "Strange Berries", "type": "food_raw", "description": "Some unusual looking berries. Edible?"},
     "bandage": {
         "name": "Bandage",
-        "description": "A simple cloth bandage. Heals a minor wound.",
+        "description": "A simple cloth bandage. Heals a minor wound.", # type: consumable
         "type": "consumable",
         "effect": "heal",
         "amount": 10, "value": 5}, # Added value for consistency
-    "leather_armor": {"name": "Leather Armor", "type": "armor", "description": "Simple but effective leather armor."},
-    "worn_staff": {"name": "Worn Staff", "type": "weapon", "description": "An old wooden staff, good for channeling energies."},
-    "simple_robes": {"name": "Simple Robes", "type": "armor", "description": "Basic robes often worn by apprentices."},
-    "pair_of_daggers": {"name": "Pair of Daggers", "type": "weapon", "description": "A set of sharp, easily concealed daggers."},
-    "shadowy_cloak": {"name": "Shadowy Cloak", "type": "armor", "description": "A dark cloak that helps blend into the shadows."},
+    "leather_armor": {"name": "Leather Armor", "type": "armor", "equip_slot": "chest", "description": "Simple but effective leather armor."},
+    "worn_staff": {"name": "Worn Staff", "type": "weapon", "equip_slot": "main_hand", "description": "An old wooden staff, good for channeling energies."},
+    "simple_robes": {"name": "Simple Robes", "type": "armor", "equip_slot": "chest", "description": "Basic robes often worn by apprentices."},
+    "pair_of_daggers": {"name": "Pair of Daggers", "type": "weapon", "equip_slot": "main_hand", "description": "A set of sharp, easily concealed daggers."},
+    "shadowy_cloak": {"name": "Shadowy Cloak", "type": "armor", "equip_slot": "chest", "description": "A dark cloak that helps blend into the shadows."}, # Assuming chest for now, could be 'back'
     "city_map_eldoria": {"name": "Map of Eldoria", "type": "map", "description": "A crudely drawn map of Eldoria."},
     "small_pouch_of_coins": {"name": "Small Pouch of Coins", "type": "currency", "value": 10, "description": "A few coins to get you started."},
-    "simple_knife": {"name": "Simple Knife", "type": "weapon", "attack_power_bonus": 1, "description": "A basic utility knife. Better than nothing."},
+    "simple_knife": {"name": "Simple Knife", "type": "weapon", "equip_slot": "main_hand", "attack_power_bonus": 1, "description": "A basic utility knife. Better than nothing."},
     "blank_map_scroll": {"name": "Blank Map Scroll", "type": "map_scroll", "description": "A rolled-up piece of parchment. Perhaps you can view a map with this?"}
 }
 
@@ -431,6 +431,17 @@ player = {
     "level": 1, # Player's level
     "xp": 0, # Player's experience points
     "xp_to_next_level": 100, # XP needed for the next level
+    "equipment": { # New dictionary for equipped items
+        "head": None,
+        "shoulders": None,
+        "chest": None, # Was armor_body
+        "hands": None,
+        "legs": None,
+        "feet": None,
+        "main_hand": None, # Was weapon
+        "off_hand": None
+
+    },
     "is_paused": False # New flag for game pause state
 }
 
@@ -725,6 +736,16 @@ def _apply_character_choices_and_stats(species_id, class_id, char_name, char_gen
     player["level"] = 1 # Initialize level
     player["xp"] = 0
     player["xp_to_next_level"] = 100 # Initial XP for level 2
+    player["equipment"] = { # Initialize equipment for new character
+        "head": None,
+        "shoulders": None,
+        "chest": None,
+        "hands": None,
+        "legs": None,
+        "feet": None,
+        "main_hand": None,
+        "off_hand": None
+    }
     player["flags"] = {} # Reset flags for a new character
 
     print(f"\nCharacter '{player['name']}' ({player['gender']} {species_info['name']} {class_info['name']}) created!")
@@ -984,7 +1005,25 @@ def run_minimal_web_server():
                 body { font-family: sans-serif; margin: 20px; background-color: #f0f0f0; color: #333; }
                 .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
                 h1 { color: #5a5a5a; }
+                .equip-slot {
+                    border: 1px solid #b0b0b0;
+                    padding: 8px;
+                    text-align: center;
+                    background-color: #e9e9e9;
+                    min-height: 20px; /* Ensure a minimum height */
+                }
                 #settings-button-container { position: fixed; top: 10px; right: 10px; z-index: 1001;}
+                .inventory-slot {
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                    text-align: center;
+                    background-color: #f0f0f0;
+                    min-height: 50px; /* Adjust as needed */
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    word-break: break-word; /* For longer item names */
+                }
                 #settings-gear-button { font-size: 24px; background: none; border: none; cursor: pointer; padding: 5px;}
                 .actions-panel { margin-bottom: 15px; }
                 .actions-panel button { margin-right: 5px; margin-bottom: 5px; }
@@ -1016,12 +1055,38 @@ def run_minimal_web_server():
                     <div id="dynamic-header-info" style="padding: 5px; margin-bottom: 5px; border: 1px solid #ccc; font-weight: bold; background-color: #e9ecef;">
                         <!-- Dynamic header will be populated here by JS -->
                     </div>
-                    <div id="game-output" class="output-area">
-                        <!-- Game messages will appear here -->
+                    <div id="main-game-content-area" style="display: flex; margin-bottom: 10px;">
+                        <div id="character-panel" style="width: 250px; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9; height: 322px; /* Match output-area height */ overflow-y: auto; margin-right: 10px;">
+                            <h4 style="margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Character</h4>
+                            <div id="char-panel-stats" style="margin-bottom: 15px;">
+                                <div id="char-panel-name">Name: N/A</div>
+                                <div id="char-panel-class">Class: N/A</div>
+                                <div id="char-panel-species">Species: N/A</div>
+                                <div id="char-panel-level">Level: N/A</div>
+                                <div id="char-panel-xp">XP: N/A / N/A</div>
+                                <div id="char-panel-hp">HP: N/A / N/A</div>
+                                <div id="char-panel-attack">Attack: N/A</div>
+                                <div id="char-panel-coins">Coins: N/A</div>
+                            </div>
+                            <h5 style="margin-bottom: 5px; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 3px;">Equipment</h5>
+                            <div id="char-panel-equipment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em;">
+                                <div id="char-panel-equip-head" class="equip-slot" title="Head">H: Empty</div>
+                                <div id="char-panel-equip-shoulders" class="equip-slot" title="Shoulders">S: Empty</div>
+                                <div id="char-panel-equip-chest" class="equip-slot" title="Chest">C: Empty</div>
+                                <div id="char-panel-equip-hands" class="equip-slot" title="Hands">G: Empty</div>
+                                <div id="char-panel-equip-legs" class="equip-slot" title="Legs">L: Empty</div>
+                                <div id="char-panel-equip-feet" class="equip-slot" title="Feet">F: Empty</div>
+                                <div id="char-panel-equip-main_hand" class="equip-slot" title="Main Hand">MH: Empty</div>
+                                <div id="char-panel-equip-off_hand" class="equip-slot" title="Off-Hand">OH: Empty</div>
+                            </div>
+
+                        </div>
+                        <div id="game-output" class="output-area" style="flex-grow: 1;">
+                            <!-- Game messages will appear here -->
+                        </div>
                     </div>
                     <div class="actions-panel">
                         <p><strong>Common Actions:</strong></p>
-                        <button onclick="performAction('look')">Look Around</button>
                         <button onclick="performAction('inventory')">Check Inventory</button>
                         <button onclick="performAction('!map')">View Map</button>
                     </div>
@@ -1467,6 +1532,49 @@ def run_minimal_web_server():
                     console.trace("displaySceneData called");
                     console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); // Log the data object
                     const outputElement = document.getElementById('game-output');
+
+                    // --- Inventory Modal Handling ---
+                    if (actionStringEcho === 'inventory') {
+                        let inventoryContent = "<p>Your inventory is empty.</p>"; // Default message for modal
+                        if (data.inventory_list && data.inventory_list.length > 0) {
+                            inventoryContent = '<div style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">'; // 6x8 grid
+                            const totalSlots = 48; // 6 rows * 8 columns
+
+                            for (let i = 0; i < totalSlots; i++) {
+                                if (i < data.inventory_list.length) {
+                                    const item = data.inventory_list[i]; // item is an object {id, name, type, equip_slot}
+                                    let slotHTML = `<div class="inventory-slot" title="${item.name}" data-item-id="${item.id}"`;
+                                    if (item.equip_slot) { // Mark equippable items visually
+                                        slotHTML += ` style="border-color: #007bff;"`; // Example: blue border for equippable
+                                    }
+                                    slotHTML += `>${item.name}</div>`;
+                                    inventoryContent += slotHTML;
+                                } else {
+                                    inventoryContent += `<div class="inventory-slot">&nbsp;</div>`; // Empty slot
+                                }
+                            }
+
+                            inventoryContent += '</div>';
+                        }
+                        showMenuModal("Backpack", inventoryContent, [{text: "Close", action: () => {}}]);
+                        data.message = ""; // Clear any default message like "Your inventory is empty" from main output
+                    }
+                    // After modal is shown (or would have been shown), add event listeners if it was inventory
+                    // Check if the modal content element exists, which indicates the modal is currently displayed
+                    if (actionStringEcho === 'inventory' && document.getElementById('custom-modal-content')) {
+                        const inventorySlotsInModal = document.getElementById('custom-modal-content').querySelectorAll('.inventory-slot');
+                        inventorySlotsInModal.forEach(slotElement => {
+                            slotElement.addEventListener('dblclick', function(event) {
+                                event.preventDefault(); // Prevent default text selection on double-click
+                                const itemId = this.getAttribute('data-item-id');
+                                console.log("Double-clicked item ID:", itemId);
+                                performAction(`equip ${itemId}`);
+                                closeModal(); // Close backpack after attempting to equip
+                            });
+                        });
+                    }
+                    // --- End Inventory Modal Handling ---
+
                     if (actionStringEcho) { // Optionally echo the command that led to this scene
                         const p_command_echo = document.createElement('p');
                         p_command_echo.innerHTML = `<strong>&gt; ${actionStringEcho}</strong>`;
@@ -1518,6 +1626,48 @@ def run_minimal_web_server():
                             headerInfoDiv.style.display = document.getElementById('game-interface').style.display === 'block' ? 'block' : 'none';
                             headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Player: ${data.player_name || 'Adventurer'} - Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} (XP: ${data.player_xp !== undefined ? data.player_xp : 'N/A'}/${data.player_xp_to_next_level !== undefined ? data.player_xp_to_next_level : 'N/A'}) - Coins: ${formatGSBCurrency(data.player_coins)} - Diamond: 0💎`;
                         }
+
+                        // Populate Character Panel
+                        const charPanelName = document.getElementById('char-panel-name');
+                        const charPanelClass = document.getElementById('char-panel-class');
+                        const charPanelSpecies = document.getElementById('char-panel-species');
+                        const charPanelLevel = document.getElementById('char-panel-level');
+                        const charPanelXp = document.getElementById('char-panel-xp');
+                        const charPanelHp = document.getElementById('char-panel-hp');
+                        const charPanelAttack = document.getElementById('char-panel-attack');
+                        const charPanelCoins = document.getElementById('char-panel-coins');
+                        // Equipment Slots
+                        const equipSlots = {
+                            head: document.getElementById('char-panel-equip-head'),
+                            shoulders: document.getElementById('char-panel-equip-shoulders'),
+                            chest: document.getElementById('char-panel-equip-chest'),
+                            hands: document.getElementById('char-panel-equip-hands'),
+                            legs: document.getElementById('char-panel-equip-legs'),
+                            feet: document.getElementById('char-panel-equip-feet'),
+                            main_hand: document.getElementById('char-panel-equip-main_hand'),
+                            off_hand: document.getElementById('char-panel-equip-off_hand')
+                        };
+                        const equipSlotPrefixes = {
+                            head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", main_hand: "MH", off_hand: "OH"
+                        };
+
+                        if (charPanelName) charPanelName.textContent = `Name: ${data.player_name || 'N/A'}`;
+                        if (charPanelClass) charPanelClass.textContent = `Class: ${data.player_class_name || 'N/A'}`;
+                        if (charPanelSpecies) charPanelSpecies.textContent = `Species: ${data.player_species_name || 'N/A'}`;
+                        if (charPanelLevel) charPanelLevel.textContent = `Level: ${data.player_level !== undefined ? data.player_level : 'N/A'}`;
+                        if (charPanelXp) charPanelXp.textContent = `XP: ${data.player_xp !== undefined ? data.player_xp : 'N/A'} / ${data.player_xp_to_next_level !== undefined ? data.player_xp_to_next_level : 'N/A'}`;
+                        if (charPanelHp) charPanelHp.textContent = `HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'} / ${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}`;
+                        if (charPanelAttack) charPanelAttack.textContent = `Attack: ${data.player_attack_power !== undefined ? data.player_attack_power : 'N/A'}`;
+                        if (charPanelCoins) charPanelCoins.textContent = `Coins: ${formatGSBCurrency(data.player_coins)}`;
+                        for (const slotKey in equipSlots) {
+                            if (equipSlots[slotKey]) {
+                                const itemName = data.player_equipment && data.player_equipment[slotKey] ? data.player_equipment[slotKey] : 'Empty';
+                                const prefix = equipSlotPrefixes[slotKey] || slotKey.substring(0,1).toUpperCase();
+                                equipSlots[slotKey].textContent = `${prefix}: ${itemName}`;
+                            }
+                        }
+
+
                         if(data.map_lines && Array.isArray(data.map_lines)) { 
                             data.map_lines.forEach(line => {
                                 const p_map_line = document.createElement('p');
@@ -1526,18 +1676,20 @@ def run_minimal_web_server():
                                 outputElement.appendChild(p_map_line);
                             });
                         }
-                        if(data.inventory_list && Array.isArray(data.inventory_list)) {
-                            const p_inv_header = document.createElement('p');
-                            p_inv_header.textContent = "You are carrying:";
-                            outputElement.appendChild(p_inv_header);
-                            if (data.inventory_list.length > 0) {
-                                data.inventory_list.forEach(item_name => {
-                                    const p_inv_item = document.createElement('p');
-                                    p_inv_item.textContent = `  - ${item_name}`;
-                                    outputElement.appendChild(p_inv_item);
-                                });
-                            }
-                        }
+                        // The block that previously printed inventory to the main output is removed
+                        // as it's now handled by the modal.
+                        // if(data.inventory_list && Array.isArray(data.inventory_list)) {
+                        //     const p_inv_header = document.createElement('p');
+                        //     p_inv_header.textContent = "You are carrying:";
+                        //     outputElement.appendChild(p_inv_header);
+                        //     if (data.inventory_list.length > 0) {
+                        //         data.inventory_list.forEach(item_name => {
+                        //             const p_inv_item = document.createElement('p');
+                        //             p_inv_item.textContent = `  - ${item_name}`;
+                        //             outputElement.appendChild(p_inv_item);
+                        //         });
+                        //     }
+                        //}
 
                         // Handle interactable features
                         const featurePanel = document.getElementById('feature-interactions-panel');
@@ -1694,6 +1846,13 @@ def run_minimal_web_server():
             "player_level": player.get("level", 1),
             "player_xp": player.get("xp", 0),
             "player_xp_to_next_level": player.get("xp_to_next_level", 100),
+            "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
+            "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
+            "player_attack_power": player.get("attack_power", 0),
+            "player_equipment": { # Initialize with all expected slots
+                "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
+                "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+            },
             "interactable_features": [], 
             "room_items": [], # List of items in the room
             "can_save_in_city": False # Default save status
@@ -1732,8 +1891,14 @@ def run_minimal_web_server():
             # Ensure inventory key exists
             player_inventory = player.get("inventory", [])
             if player_inventory:
+                # Send detailed inventory: list of objects {id, name, type, equip_slot}
                 game_response["inventory_list"] = [
-                    items_data.get(item_id, {}).get("name", item_id.replace("_", " "))
+                    {
+                        "id": item_id,
+                        "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " ")),
+                        "type": items_data.get(item_id, {}).get("type"),
+                        "equip_slot": items_data.get(item_id, {}).get("equip_slot")
+                    }
                     for item_id in player_inventory
                 ]
                 game_response["message"] = "" 
@@ -1797,6 +1962,34 @@ def run_minimal_web_server():
                 player["flags"]["found_starter_items"] = True
             else:
                 game_response["message"] = "The crate is already open and empty."
+        elif action.startswith('equip '):
+            item_id_to_equip = action.split(' ', 1)[1]
+            if item_id_to_equip in player.get("inventory", []):
+                item_details = items_data.get(item_id_to_equip)
+                if item_details and item_details.get("equip_slot"):
+                    slot_to_equip_to = item_details["equip_slot"]
+                    
+                    # Unequip current item in that slot, if any
+                    currently_equipped_item_id = player["equipment"].get(slot_to_equip_to)
+                    if currently_equipped_item_id:
+                        player["inventory"].append(currently_equipped_item_id)
+                        # Log unequip event if needed
+                        log_game_event("item_unequipped", {"item_id": currently_equipped_item_id, "slot": slot_to_equip_to, "moved_to_inventory": True})
+                        game_response["message"] = f"You unequipped {items_data.get(currently_equipped_item_id,{}).get('name', currently_equipped_item_id)}.\n"
+                    
+                    player["equipment"][slot_to_equip_to] = item_id_to_equip
+                    player["inventory"].remove(item_id_to_equip)
+                    game_response["message"] += f"You equipped {item_details.get('name', item_id_to_equip)}."
+                    log_game_event("item_equipped", {"item_id": item_id_to_equip, "slot": slot_to_equip_to})
+                    # TODO: Adjust player stats based on equipped item
+                else:
+                    game_response["message"] = f"You cannot equip {items_data.get(item_id_to_equip,{}).get('name', item_id_to_equip)}."
+            else:
+                game_response["message"] = f"You don't have {items_data.get(item_id_to_equip,{}).get('name', item_id_to_equip)} in your inventory."
+            # Ensure current location data is still part of the response
+            current_loc_id_for_equip = player.get("current_location_id")
+            game_response["location_name"] = locations.get(current_loc_id_for_equip, {}).get("name", "Unknown Area")
+            game_response["description"] = locations.get(current_loc_id_for_equip, {}).get("description", "An unfamiliar place.")
         else:
             game_response["message"] = f"The action '{action}' is not fully implemented or recognized for the browser interface yet."
             # Ensure location details are still sent for unrecognized actions
@@ -1849,6 +2042,21 @@ def run_minimal_web_server():
         game_response["player_level"] = player.get("level", 1)
         game_response["player_xp"] = player.get("xp", 0)
         game_response["player_xp_to_next_level"] = player.get("xp_to_next_level", 100)
+        game_response["player_class_name"] = classes_data.get(player.get("class", ""), {}).get("name", "N/A")
+        game_response["player_species_name"] = species_data.get(player.get("species", ""), {}).get("name", "N/A")
+        game_response["player_attack_power"] = player.get("attack_power", 0)
+        
+        # Populate equipped items names
+        game_response["player_equipment"] = {}
+        player_equipment_data = player.get("equipment", {})
+        # Ensure all defined slots are present in the response
+        expected_slots = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+        for slot in expected_slots:
+            item_id = player_equipment_data.get(slot) # Get item_id for the current slot
+            if item_id and item_id in items_data:
+                game_response["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
+            else:
+                game_response["player_equipment"][slot] = "Empty"
 
         # Determine if saving is allowed
         current_zone_for_save = current_location_data_for_response.get("zone")
@@ -1920,6 +2128,13 @@ def run_minimal_web_server():
                 "player_level": player.get("level", 1),
                 "player_xp": player.get("xp", 0),
                 "player_xp_to_next_level": player.get("xp_to_next_level", 100),
+                "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
+                "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
+                "player_attack_power": player.get("attack_power", 0),
+                "player_equipment": {
+                    "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
+                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                },
                 "interactable_features": [], # Will be populated by final assembly logic
                 "room_items": [] # Will be populated by final assembly logic
             }
@@ -1935,6 +2150,14 @@ def run_minimal_web_server():
                 if primary_action:
                     initial_scene_data["interactable_features"].append({"id": f_id, "name": f_id.replace("_", " ").capitalize(), "action": primary_action})
             
+            # Populate equipped items for initial scene
+            player_equipment_data_init = player.get("equipment", {})
+            expected_slots_init = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+            for slot in expected_slots_init:
+                item_id = player_equipment_data_init.get(slot)
+                if item_id and item_id in items_data:
+                    initial_scene_data["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
+
             # Items in the room (should be empty at start, items are in crate)
             # initial_scene_data["room_items"] = [...] 
 
@@ -1966,6 +2189,13 @@ def run_minimal_web_server():
                 "player_level": player.get("level", 1),
                 "player_xp": player.get("xp", 0),
                 "player_xp_to_next_level": player.get("xp_to_next_level", 100),
+                "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
+                "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
+                "player_attack_power": player.get("attack_power", 0),
+                "player_equipment": {
+                    "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
+                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                },
                 "interactable_features": [],
                 "room_items": []
             }
@@ -1985,6 +2215,13 @@ def run_minimal_web_server():
                 {"id": item_id, "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " "))}
                 for item_id in room_items_list
             ]
+            # Populate equipped items for loaded scene
+            player_equipment_data_load = player.get("equipment", {})
+            expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+            for slot in expected_slots_load:
+                item_id = player_equipment_data_load.get(slot)
+                if item_id and item_id in items_data:
+                    loaded_scene_data["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
             return jsonify(loaded_scene_data)
         return jsonify({"error": f"Failed to load character '{character_name}'."}), 404
 
@@ -2010,6 +2247,13 @@ def run_minimal_web_server():
                 "player_level": player.get("level", 1),
                 "player_xp": player.get("xp", 0),
                 "player_xp_to_next_level": player.get("xp_to_next_level", 100),
+                "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
+                "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
+                "player_attack_power": player.get("attack_power", 0),
+                "player_equipment": {
+                    "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
+                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                },
                 "interactable_features": [], # Populate these like in process_game_action
                 "room_items": []
             }
@@ -2024,6 +2268,14 @@ def run_minimal_web_server():
             scene_data["room_items"] = [
                 {"id": item_id, "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " "))}
                 for item_id in room_items_list ]
+            
+            # Populate equipped items for resumed scene
+            player_equipment_data_resume = player.get("equipment", {})
+            expected_slots_resume = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+            for slot in expected_slots_resume:
+                item_id = player_equipment_data_resume.get(slot)
+                if item_id and item_id in items_data:
+                    scene_data["player_equipment"][slot] = items_data[item_id].get("name", "Unknown Item")
             return jsonify(scene_data)
         return jsonify({"error": "Server state mismatch or no active game for this character. Please load character again."}), 400
 
