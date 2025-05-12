@@ -352,7 +352,7 @@ def initialize_game_state():
     # For terminal play, get choices first
     species_id, class_id, char_name, char_gender = _get_terminal_character_choices()
 
-    if not game_logic.apply_character_choices_and_stats(player, species_id, class_id, char_name, char_gender, species_data, classes_data, save_player_data):
+    if not game_logic.apply_character_choices_and_stats(player, species_id, class_id, char_name, char_gender, items_data, species_data, classes_data, save_player_data):
         player.game_active = False
         print("Character creation cancelled. Game not started.")
         # No return here, _apply_character_choices_and_stats returns bool but doesn't stop execution
@@ -408,7 +408,8 @@ def handle_npc_defeat(npc_id):
     
     # Award XP for defeating NPC
     xp_reward = npc_data.get("xp_reward", 25) # Default XP or define in NPC data
-    player.add_xp(xp_reward, log_event_func=log_game_event)
+    player.add_xp(xp_reward, log_event_func=log_game_event) 
+    player._recalculate_derived_stats(items_data) # Recalculate stats after potential level up from XP
 
     del current_loc_data["npcs"][npc_id]
     player.leave_combat() # Player object's method
@@ -559,7 +560,8 @@ def run_minimal_web_server():
             "player_attack_power": player.attack_power,
             "player_equipment": { # Initialize with all expected slots
                 "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
-                "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty",
+                "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
             },
             "interactable_features": [], 
             "room_items": [], # List of items in the room
@@ -670,28 +672,24 @@ def run_minimal_web_server():
             else:
                 game_response["message"] = "The crate is already open and empty."
         elif action.startswith('unequip '):
-            item_id_to_unequip = action.split(' ', 1)[1]
+            item_id_to_unequip_from_action = action.split(' ', 1)[1]
             # Find the item in equipped slots
-            item_id_found_in_equipment = None
             slot_unequipped_from = None
-            player_equipment_data = player.equipment
-            for slot_key, equipped_item_id in player_equipment_data.items():
-                if equipped_item_id == item_id_to_unequip: # Match by item ID
+            for slot_key, equipped_item_id in player.equipment.items():
+                if equipped_item_id == item_id_to_unequip_from_action: # Match by item ID
                     slot_unequipped_from = slot_key
                     break
 
-            if item_id_found_in_equipment:
-                player.add_item_to_inventory(item_id_found_in_equipment)
-                player.equipment[slot_unequipped_from] = None
-                game_response["message"] = f"You unequipped {items_data.get(item_id_found_in_equipment,{}).get('name', item_id_found_in_equipment)} from your {slot_unequipped_from.replace('_', ' ')} slot."
-                log_game_event("item_unequipped", {"item_id": item_id_found_in_equipment, "slot": slot_unequipped_from, "moved_to_inventory": True})
+            if slot_unequipped_from:
+                unequip_message = player.unequip_item(slot_unequipped_from, items_data, log_event_func=log_game_event)
+                game_response["message"] = unequip_message
             else:
                 game_response["message"] = f"That item doesn't seem to be equipped."
             
             # Ensure current location data is still part of the response
             current_loc_id_for_unequip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
-            game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.")
+            game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.") # Fixed typo here
 
         elif action.startswith('equip '):
             item_id_to_equip = action.split(' ', 1)[1]
@@ -789,8 +787,8 @@ def run_minimal_web_server():
         # Populate equipped items names
         game_response["player_equipment"] = {}
         player_equipment_data = player.equipment
-        # Ensure all defined slots are present in the response
-        expected_slots = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+        # Ensure all defined slots (including new ones) are present in the response
+        expected_slots = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "back", "trinket1", "trinket2"]
         for slot in expected_slots:
             item_id = player_equipment_data.get(slot) # Get item_id from player's equipment dict
 
@@ -849,7 +847,7 @@ def run_minimal_web_server():
             # print(f"DEBUG: Missing data in /api/create_character: {data}") # Keep for debugging if needed
             return jsonify({"error": "Missing character creation data."}), 400
 
-        if game_logic.apply_character_choices_and_stats(player, species_id, class_id, player_name, player_gender, species_data, classes_data, save_player_data):
+        if game_logic.apply_character_choices_and_stats(player, species_id, class_id, player_name, player_gender, items_data, species_data, classes_data, save_player_data):
             # player.game_active is set by apply_character_choices_and_stats
             species_info = species_data[player.species_id]
             
@@ -877,7 +875,8 @@ def run_minimal_web_server():
                 "player_attack_power": player.attack_power,
                 "player_equipment": {
                     "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
-                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty",
+                    "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
                 },
                 "interactable_features": [], # Will be populated by final assembly logic
                 "room_items": [] # Will be populated by final assembly logic
@@ -896,7 +895,7 @@ def run_minimal_web_server():
             
             # Populate equipped items for initial scene
             player_equipment_data_init = player.equipment
-            expected_slots_init = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+            expected_slots_init = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "back", "trinket1", "trinket2"]
             for slot in expected_slots_init:
                 item_id = player_equipment_data_init.get(slot) # Get item_id from player's equipment dict
 
@@ -942,7 +941,8 @@ def run_minimal_web_server():
                 "player_attack_power": player.attack_power,
                 "player_equipment": {
                     "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
-                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty",
+                    "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
                 },
                 "interactable_features": [],
                 "room_items": []
@@ -965,7 +965,7 @@ def run_minimal_web_server():
             ]
             # Populate equipped items for loaded scene
             player_equipment_data_load = player.equipment
-            expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+            expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "back", "trinket1", "trinket2"]
             for slot in expected_slots_load:
                 item_id = player_equipment_data_load.get(slot) # Get item_id from player's equipment dict
 
@@ -1004,7 +1004,8 @@ def run_minimal_web_server():
                 "player_attack_power": player.attack_power,
                 "player_equipment": {
                     "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
-                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
+                    "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty",
+                    "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
                 },
                 "interactable_features": [], # Populate these like in process_game_action
                 "room_items": []
@@ -1023,7 +1024,7 @@ def run_minimal_web_server():
             
             # Populate equipped items for resumed scene
             player_equipment_data_resume = player.equipment
-            expected_slots_resume = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
+            expected_slots_resume = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "back", "trinket1", "trinket2"]
             for slot in expected_slots_resume:
                 item_id = player_equipment_data_resume.get(slot) # Get item_id from player's equipment dict
                 # Send both the item name and the item ID for the frontend

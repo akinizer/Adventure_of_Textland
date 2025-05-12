@@ -10,9 +10,15 @@ class Player:
         self.current_location_id = None
         self.inventory = []
         self.game_active = False
+
+        # Base stats (from class/species, set during character creation)
+        self.base_max_hp = 0
+        self.base_attack_power = 0
+        # Derived stats (calculated from base + equipment)
         self.hp = 0
         self.max_hp = 0
         self.attack_power = 0
+
         self.special_power = 0
         self.special_moves = {}
         self.special_cooldowns = {}
@@ -27,9 +33,36 @@ class Player:
         self.xp_to_next_level = 100
         self.equipment = {
             "head": None, "shoulders": None, "chest": None, "hands": None,
-            "legs": None, "feet": None, "main_hand": None, "off_hand": None
+            "legs": None, "feet": None, "main_hand": None, "off_hand": None,
+            "neck": None,
+            "back": None,
+            "trinket1": None, # New Trinket Slot 1
+            "trinket2": None  # New Trinket Slot 2
         }
         self.is_paused = False
+
+    def _recalculate_derived_stats(self, items_master_data):
+        """Recalculates derived stats based on base stats, class/species, and equipment."""
+        # Start with base stats (which should include class/species contributions from creation)
+        current_max_hp = self.base_max_hp
+        current_attack_power = self.base_attack_power
+        # Add other stats like defense, special_power if they can be modified by equipment
+
+        for slot, item_id in self.equipment.items():
+            if item_id:
+                item_details = items_master_data.get(item_id, {})
+                bonuses = item_details.get("stat_bonuses", {})
+                current_max_hp += bonuses.get("max_hp", 0)
+                current_attack_power += bonuses.get("attack_power", 0)
+                # Add other stat bonuses here
+
+        self.max_hp = current_max_hp
+        self.attack_power = current_attack_power
+
+        # Ensure current HP doesn't exceed new max_hp
+        if self.hp > self.max_hp:
+            self.hp = self.max_hp
+        # print(f"Stats recalculated: MaxHP={self.max_hp}, Attack={self.attack_power}")
 
     def set_active(self, is_active):
         self.game_active = is_active
@@ -80,9 +113,14 @@ class Player:
     def equip_item(self, item_id_to_equip, slot_to_equip_to, items_master_data, log_event_func=None):
         """Equips an item, handling unequip of existing item and inventory."""
         item_details = items_master_data.get(item_id_to_equip)
-        if not item_details or item_details.get("equip_slot") != slot_to_equip_to:
-            return f"Cannot equip {item_details.get('name', item_id_to_equip)} to {slot_to_equip_to}."
+        
+        item_equip_slot_type = item_details.get("equip_slot")
+        can_equip_to_chosen_slot = (item_equip_slot_type == slot_to_equip_to) or \
+                                   (item_equip_slot_type == "trinket" and slot_to_equip_to in ["trinket1", "trinket2"])
 
+        if not item_details or not can_equip_to_chosen_slot:
+            return f"Cannot equip {item_details.get('name', item_id_to_equip)} to {slot_to_equip_to}. Item is for {item_equip_slot_type}."
+        
         message = ""
         # Unequip current item in that slot, if any
         currently_equipped_item_id = self.equipment.get(slot_to_equip_to)
@@ -95,9 +133,9 @@ class Player:
         self.equipment[slot_to_equip_to] = item_id_to_equip
         self.remove_item_from_inventory(item_id_to_equip) # Assumes item was in inventory
         message += f"You equipped {item_details.get('name', item_id_to_equip)}."
+        self._recalculate_derived_stats(items_master_data)
         if log_event_func:
             log_event_func("item_equipped", {"item_id": item_id_to_equip, "slot": slot_to_equip_to, "player_name": self.name})
-        # TODO: Adjust player stats based on equipped item
         return message
 
     def unequip_item(self, slot_key, items_master_data, log_event_func=None):
@@ -107,9 +145,9 @@ class Player:
             self.add_item_to_inventory(item_id_to_unequip)
             self.equipment[slot_key] = None
             item_name = items_master_data.get(item_id_to_unequip, {}).get("name", item_id_to_unequip)
+            self._recalculate_derived_stats(items_master_data)
             if log_event_func:
                 log_event_func("item_unequipped", {"item_id": item_id_to_unequip, "slot": slot_key, "moved_to_inventory": True, "player_name": self.name})
-            # TODO: Adjust player stats based on unequipped item
             return f"You unequipped {item_name} from your {slot_key.replace('_', ' ')} slot."
         return f"Nothing equipped in {slot_key.replace('_', ' ')} slot."
 
@@ -129,11 +167,13 @@ class Player:
             self.level += 1
             self.xp -= self.xp_to_next_level
             self.xp_to_next_level = int(self.xp_to_next_level * 1.5)
-            
+
             # Apply level-up bonuses
-            self.max_hp += 10
-            self.hp = self.max_hp # Full heal
-            self.attack_power += 2
+            self.base_max_hp += 10 # Increase base stat
+            self.base_attack_power += 2 # Increase base stat
+            # Derived stats (max_hp, attack_power) will be updated by _recalculate_derived_stats()
+            # which should be called after this if items_master_data is available, or on next equip/unequip.
+            self.hp = self.base_max_hp # For now, heal to new base_max_hp. Full recalc will adjust.
 
             print(f"\n*** LEVEL UP! You are now Level {self.level}! ***")
             print(f"Max HP increased to {self.max_hp}. Attack Power increased to {self.attack_power}.")

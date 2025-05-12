@@ -568,10 +568,16 @@ function displaySceneData(data, actionStringEcho = null) {
             legs: document.getElementById('char-panel-equip-legs'),
             feet: document.getElementById('char-panel-equip-feet'),
             main_hand: document.getElementById('char-panel-equip-main_hand'),
-            off_hand: document.getElementById('char-panel-equip-off_hand')
+            off_hand: document.getElementById('char-panel-equip-off_hand'),
+            neck: document.getElementById('char-panel-equip-neck'), // New
+            back: document.getElementById('char-panel-equip-back'),   // New
+            trinket1: document.getElementById('char-panel-equip-trinket1'), // New
+            trinket2: document.getElementById('char-panel-equip-trinket2')  // New
         };
         const equipSlotPrefixes = {
-            head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", main_hand: "MH", off_hand: "OH"
+            head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", 
+            main_hand: "MH", off_hand: "OH", neck: "N", back: "B", 
+            trinket1: "T1", trinket2: "T2" // New
         };
 
         for (const slotKey in equipSlots) {

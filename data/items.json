@@ -1,27 +1,294 @@
 {
-    "healing_potion": {"name": "Healing Potion", "type": "consumable", "effect": "heal", "amount": 20, "description": "A vial of swirling red liquid. Restores 20 HP."},
-    "shiny_coin": {"name": "Shiny Coin", "type": "currency", "description": "A well-polished gold coin."},
-    "apple": {"name": "Apple", "type": "food", "description": "A crisp red apple."},
-    "bread_loaf": {"name": "Bread Loaf", "type": "food", "description": "A hearty loaf of bread."},
-    "rusty_key": {"name": "Rusty Key", "type": "key_item", "description": "An old, rusty key."},
-    "fishing_net_scraps": {"name": "Fishing Net Scraps", "type": "junk", "description": "Torn pieces of an old fishing net."},
-    "golden_amulet": {"name": "Golden Amulet", "type": "treasure", "description": "A beautiful golden amulet."},
-    "tattered_pelt": {"name": "Tattered Pelt", "type": "material", "description": "A worn piece of animal fur."},
-    "grimy_coin": {"name": "Grimy Coin", "type": "currency", "description": "A dirty, old coin. Might be worth something."},
-    "glowing_mushroom": {"name": "Glowing Mushroom", "type": "reagent", "description": "A mushroom that emits a soft, ethereal glow."},
-    "lucky_charm_figurine": {"name": "Lucky Charm Figurine", "type": "quest_item", "description": "A small, intricately carved wooden figurine."},
-    "scouts_map_fragment": {"name": "Scout's Map Fragment", "type": "quest_reward", "description": "A piece of a map, perhaps leading somewhere interesting."},
-    "boar_tusk": {"name": "Boar Tusk", "type": "material", "description": "A sharp tusk from a wild boar."},
-    "raw_meat": {"name": "Raw Meat", "type": "food_raw", "description": "A fresh slab of raw meat. Needs cooking."},
-    "strange_berries": {"name": "Strange Berries", "type": "food_raw", "description": "Some unusual looking berries. Edible?"},
-    "bandage": {"name": "Bandage", "description": "A simple cloth bandage. Heals a minor wound.", "type": "consumable", "effect": "heal", "amount": 10, "value": 5},
-    "leather_armor": {"name": "Leather Armor", "type": "armor", "equip_slot": "chest", "description": "Simple but effective leather armor."},
-    "worn_staff": {"name": "Worn Staff", "type": "weapon", "equip_slot": "main_hand", "description": "An old wooden staff, good for channeling energies."},
-    "simple_robes": {"name": "Simple Robes", "type": "armor", "equip_slot": "chest", "description": "Basic robes often worn by apprentices."},
-    "pair_of_daggers": {"name": "Pair of Daggers", "type": "weapon", "equip_slot": "main_hand", "description": "A set of sharp, easily concealed daggers."},
-    "shadowy_cloak": {"name": "Shadowy Cloak", "type": "armor", "equip_slot": "chest", "description": "A dark cloak that helps blend into the shadows."},
-    "city_map_eldoria": {"name": "Map of Eldoria", "type": "map", "description": "A crudely drawn map of Eldoria."},
-    "small_pouch_of_coins": {"name": "Small Pouch of Coins", "type": "currency", "value": 10, "description": "A few coins to get you started."},
-    "simple_knife": {"name": "Simple Knife", "type": "weapon", "equip_slot": "main_hand", "attack_power_bonus": 1, "description": "A basic utility knife. Better than nothing."},
-    "blank_map_scroll": {"name": "Blank Map Scroll", "type": "map_scroll", "description": "A rolled-up piece of parchment. Perhaps you can view a map with this?"}
+    "healing_potion": {
+        "name": "Healing Potion", 
+        "type": "consumable", 
+        "effect": "heal", 
+        "amount": 20, 
+        "description": "A vial of swirling red liquid. Restores 20 HP.",
+        "value": 25,
+        "weight": 0.5,
+        "rarity": "common",
+        "flavor_text": "Glows faintly with restorative magic."
+    },
+    "shiny_coin": {
+        "name": "Shiny Coin", 
+        "type": "currency_item", 
+        "description": "A well-polished gold coin.",
+        "value": 1, 
+        "weight": 0.01,
+        "rarity": "common",
+        "flavor_text": "Could this be actual gold, or just a very convincing fake?"
+    },
+    "apple": {
+        "name": "Apple", 
+        "type": "food", 
+        "description": "A crisp red apple.",
+        "effect": "heal",
+        "amount": 5,
+        "value": 2,
+        "weight": 0.2,
+        "rarity": "common",
+        "flavor_text": "Keeps the doctor away, or so they say."
+    },
+    "bread_loaf": {
+        "name": "Bread Loaf", 
+        "type": "food", 
+        "description": "A hearty loaf of bread.",
+        "effect": "heal",
+        "amount": 10,
+        "value": 5,
+        "weight": 0.5,
+        "rarity": "common",
+        "flavor_text": "The simple pleasure of freshly baked bread."
+    },
+    "rusty_key": {
+        "name": "Rusty Key", 
+        "type": "key_item", 
+        "description": "An old, rusty key.",
+        "value": 0,
+        "weight": 0.1,
+        "rarity": "quest",
+        "flavor_text": "What secrets might this unlock?"
+    },
+    "fishing_net_scraps": {
+        "name": "Fishing Net Scraps", 
+        "type": "junk", 
+        "description": "Torn pieces of an old fishing net.",
+        "value": 1,
+        "weight": 0.3,
+        "rarity": "junk",
+        "flavor_text": "Hardly useful for fishing anymore."
+    },
+    "golden_amulet": {
+        "name": "Golden Amulet", 
+        "type": "armor", 
+        "equip_slot": "neck",
+        "description": "A beautiful golden amulet, warm to the touch.",
+        "value": 150,
+        "weight": 0.2,
+        "rarity": "uncommon",
+        "stat_bonuses": {
+            "max_hp": 5,
+            "special_power": 2
+        },
+        "flavor_text": "It seems to hum with a faint, protective energy."
+    },
+    "tattered_pelt": {
+        "name": "Tattered Pelt", 
+        "type": "material", 
+        "description": "A worn piece of animal fur.",
+        "value": 3,
+        "weight": 0.7,
+        "rarity": "common",
+        "flavor_text": "Could be useful for crafting, if one had the skill."
+    },
+    "grimy_coin": {
+        "name": "Grimy Coin", 
+        "type": "currency_item", 
+        "description": "A dirty, old coin. Might be worth something.",
+        "value": 1,
+        "weight": 0.01,
+        "rarity": "common",
+        "flavor_text": "Covered in who-knows-what."
+    },
+    "glowing_mushroom": {
+        "name": "Glowing Mushroom", 
+        "type": "reagent", 
+        "description": "A mushroom that emits a soft, ethereal glow.",
+        "value": 10,
+        "weight": 0.1,
+        "rarity": "uncommon",
+        "flavor_text": "Often used in alchemical concoctions."
+    },
+    "lucky_charm_figurine": {
+        "name": "Lucky Charm Figurine", 
+        "type": "quest_item", 
+        "description": "A small, intricately carved wooden figurine.",
+        "value": 0,
+        "weight": 0.1,
+        "rarity": "quest",
+        "flavor_text": "It feels surprisingly warm in your hand."
+    },
+    "scouts_map_fragment": {
+        "name": "Scout's Map Fragment", 
+        "type": "quest_reward", 
+        "description": "A piece of a map, perhaps leading somewhere interesting.",
+        "value": 0,
+        "weight": 0.05,
+        "rarity": "quest",
+        "flavor_text": "Only a part of a larger picture."
+    },
+    "boar_tusk": {
+        "name": "Boar Tusk", 
+        "type": "material", 
+        "description": "A sharp tusk from a wild boar.",
+        "value": 8,
+        "weight": 0.4,
+        "rarity": "common",
+        "flavor_text": "A trophy from a fierce beast."
+    },
+    "raw_meat": {
+        "name": "Raw Meat", 
+        "type": "food_raw", 
+        "description": "A fresh slab of raw meat. Needs cooking.",
+        "value": 2,
+        "weight": 1.0,
+        "rarity": "common",
+        "flavor_text": "Best not eaten in its current state."
+    },
+    "strange_berries": {
+        "name": "Strange Berries", 
+        "type": "food_raw", 
+        "description": "Some unusual looking berries. Edible?",
+        "effect": "heal", 
+        "amount": 2,
+        "value": 1,
+        "weight": 0.1,
+        "rarity": "common",
+        "flavor_text": "They smell faintly sweet, but also a bit... odd."
+    },
+    "bandage": {
+        "name": "Bandage", 
+        "description": "A simple cloth bandage. Heals a minor wound.", 
+        "type": "consumable", 
+        "effect": "heal", 
+        "amount": 10, 
+        "value": 5,
+        "weight": 0.1,
+        "rarity": "common",
+        "flavor_text": "A traveler's best friend for small scrapes."
+    },
+    "leather_armor": {
+        "name": "Leather Armor", 
+        "type": "armor", 
+        "equip_slot": "chest", 
+        "description": "Simple but effective leather armor.",
+        "value": 50,
+        "weight": 5.0,
+        "rarity": "common",
+        "stat_bonuses": {
+            "max_hp": 10 
+        },
+        "flavor_text": "Sturdy and reliable, if a bit plain."
+    },
+    "worn_staff": {
+        "name": "Worn Staff", 
+        "type": "weapon", 
+        "equip_slot": "main_hand", 
+        "description": "An old wooden staff, good for channeling energies.",
+        "value": 30,
+        "weight": 2.0,
+        "rarity": "common",
+        "stat_bonuses": {
+            "attack_power": 1,
+            "special_power": 3
+        },
+        "flavor_text": "Smooth from years of use."
+    },
+    "simple_robes": {
+        "name": "Simple Robes", 
+        "type": "armor", 
+        "equip_slot": "chest", 
+        "description": "Basic robes often worn by apprentices.",
+        "value": 25,
+        "weight": 1.5,
+        "rarity": "common",
+        "stat_bonuses": {
+            "max_hp": 5,
+            "special_power": 2
+        },
+        "flavor_text": "Light and allows for ease of movement."
+    },
+    "pair_of_daggers": {
+        "name": "Pair of Daggers", 
+        "type": "weapon", 
+        "equip_slot": "main_hand", 
+        "description": "A set of sharp, easily concealed daggers.",
+        "value": 40,
+        "weight": 1.0,
+        "rarity": "common",
+        "stat_bonuses": {
+            "attack_power": 2
+        },
+        "flavor_text": "Favored by those who prefer a quick, silent approach."
+    },
+    "shadowy_cloak": {
+        "name": "Shadowy Cloak", 
+        "type": "armor", 
+        "equip_slot": "back", 
+        "description": "A dark cloak that helps blend into the shadows.",
+        "value": 60,
+        "weight": 1.0,
+        "rarity": "uncommon",
+        "stat_bonuses": {
+            "stealth": 5 
+        },
+        "flavor_text": "The shadows seem to cling to its fabric."
+    },
+    "city_map_eldoria": {
+        "name": "Map of Eldoria", 
+        "type": "map", 
+        "description": "A crudely drawn map of Eldoria.",
+        "value": 10,
+        "weight": 0.1,
+        "rarity": "common",
+        "flavor_text": "Shows the main districts and points of interest."
+    },
+    "small_pouch_of_coins": {
+        "name": "Small Pouch of Coins", 
+        "type": "currency_container", 
+        "value": 10, 
+        "description": "A few coins to get you started.",
+        "weight": 0.2,
+        "rarity": "common",
+        "flavor_text": "The jingle of coins is a welcome sound."
+    },
+    "simple_knife": {
+        "name": "Simple Knife", 
+        "type": "weapon", 
+        "equip_slot": "main_hand", 
+        "description": "A basic utility knife. Better than nothing.",
+        "value": 15,
+        "weight": 0.5,
+        "rarity": "common",
+        "stat_bonuses": {
+            "attack_power": 1
+        },
+        "flavor_text": "Every adventurer needs a trusty blade, however small."
+    },
+    "blank_map_scroll": {
+        "name": "Blank Map Scroll", 
+        "type": "map_scroll", 
+        "description": "A rolled-up piece of parchment. Perhaps you can view a map with this?",
+        "value": 5,
+        "weight": 0.1,
+        "rarity": "common",
+        "flavor_text": "Ready to be filled with charted territories."
+    },
+    "ring_of_minor_vitality": {
+        "name": "Ring of Minor Vitality",
+        "type": "armor",
+        "equip_slot": "trinket",
+        "description": "A simple silver ring that hums with a faint life energy.",
+        "value": 75,
+        "weight": 0.1,
+        "rarity": "uncommon",
+        "stat_bonuses": {
+            "max_hp": 5
+        },
+        "flavor_text": "It feels warm to the touch."
+    },
+    "charm_of_keen_eye": {
+        "name": "Charm of Keen Eye",
+        "type": "armor",
+        "equip_slot": "trinket",
+        "description": "A small, polished stone on a leather thong. It seems to sharpen your focus.",
+        "value": 80,
+        "weight": 0.1,
+        "rarity": "uncommon",
+        "stat_bonuses": {
+            "attack_power": 1
+        },
+        "flavor_text": "The world seems a little clearer when you wear it."
+    }
 }
