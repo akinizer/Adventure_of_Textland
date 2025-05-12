@@ -17,6 +17,7 @@ try:
 except ImportError:
     flask_available = False
 
+import game_logic # Import our new game logic module
 HOSTILE_MOB_VISUAL = """
   .--""--.
  /        \\
@@ -272,9 +273,9 @@ def sanitize_filename(name):
     name = re.sub(r'(?u)[^-\w.]', '', name) # Remove non-alphanumeric (excluding -, _, .)
     return name if name else "invalid_name"
 
-def save_player_data(reason_for_save="Game state saved"):
+def save_player_data(player_to_save, reason_for_save="Game state saved"):
     """Saves current player data to their character_creation.json file."""
-    if not player.get("name"):
+    if not player_to_save.get("name"):
         print("[ERROR] Cannot save game: Player name not set.") # Changed to ERROR for consistency
         return False # Indicate failure
 
@@ -282,28 +283,28 @@ def save_player_data(reason_for_save="Game state saved"):
         try:
             os.makedirs(PLAYER_LOGS_DIR)
         except OSError as e:
-            print(f"[Error] Could not create player logs directory: {e}")
+            print(f"[ERROR] Could not create player logs directory: {e}")
             return False # Indicate failure
 
-    player_name_sanitized = sanitize_filename(player.get("name")) # Name is validated before this point
+    player_name_sanitized = sanitize_filename(player_to_save.get("name"))
     player_specific_dir = os.path.join(PLAYER_LOGS_DIR, player_name_sanitized)
 
     if not os.path.exists(player_specific_dir):
         try:
             os.makedirs(player_specific_dir)
         except OSError as e:
-            print(f"[ERROR] Could not create directory for player '{player.get('name')}': {e}") # Changed to ERROR
+            print(f"[ERROR] Could not create directory for player '{player_to_save.get('name')}': {e}")
             return False
 
     # Always save to the canonical save file name that load_character_data uses.
     save_file_path = os.path.join(player_specific_dir, "character_creation.json")
     try:
         with open(save_file_path, 'w') as f:
-            json.dump(player, f, indent=4)
-        print(f"[Save] {reason_for_save}. Player data for '{player.get('name')}' saved to {save_file_path}")
+            json.dump(player_to_save, f, indent=4)
+        print(f"[Save] {reason_for_save}. Player data for '{player_to_save.get('name')}' saved to {save_file_path}")
         return True # Indicate success
     except Exception as e:
-        print(f"[ERROR] Failed to save player data for '{player.get('name')}': {e}") # Changed to ERROR
+        print(f"[ERROR] Failed to save player data for '{player_to_save.get('name')}': {e}")
         return False
 
 def delete_character_data(character_display_name):
@@ -375,54 +376,12 @@ def log_game_event(event_type, data_dict):
     except Exception as e:
         print(f"[Error] Failed to write to event log {log_file_path}: {e}")
 
-def _apply_character_choices_and_stats(species_id, class_id, char_name, char_gender):
-    """Applies chosen character details and stats to the player object."""
-    player["species"] = species_id
-    player["class"] = class_id
-    player["name"] = char_name
-    player["gender"] = char_gender
-
-    class_info = classes_data[class_id]
-    species_info = species_data[species_id]
-    
-    class_stats = class_info["base_stats"]
-    species_bonuses = species_info["stat_bonuses"]
-
-    player["max_hp"] = class_stats["hp"] + species_bonuses.get("hp_bonus", 0)
-    player["hp"] = player["max_hp"]
-    player["attack_power"] = class_stats["attack_power"] + species_bonuses.get("attack_bonus", 0)
-    player["special_power"] = class_stats.get("special_power", 0) + species_bonuses.get("special_power_bonus", 0)
-    player["special_moves"] = dict(class_info.get("special_moves", {})) 
-    player["special_cooldowns"] = {move_id: 0 for move_id in player["special_moves"]}    
-    # Give basic starting items directly after character creation
-    player["inventory"] = ["simple_knife", "blank_map_scroll"] 
-    player["coins"] = 0 # Initialize coins
-    player["level"] = 1 # Initialize level
-    player["xp"] = 0
-    player["xp_to_next_level"] = 100 # Initial XP for level 2
-    player["equipment"] = { # Initialize equipment for new character
-        "head": None,
-        "shoulders": None,
-        "chest": None,
-        "hands": None,
-        "legs": None,
-        "feet": None,
-        "main_hand": None,
-        "off_hand": None
-    }
-    player["flags"] = {} # Reset flags for a new character
-
-    print(f"\nCharacter '{player['name']}' ({player['gender']} {species_info['name']} {class_info['name']}) created!")
-    # Save the initial state of the newly created character.
-    save_player_data(reason_for_save=f"Character '{player['name']}' created and initial state saved")
-    return True
-
-
 def initialize_game_state():
     """Guides through new character creation and sets up initial game state."""
     # For terminal play, get choices first
     species_id, class_id, char_name, char_gender = _get_terminal_character_choices()
-    if not _apply_character_choices_and_stats(species_id, class_id, char_name, char_gender):
+
+    if not game_logic.apply_character_choices_and_stats(player, species_id, class_id, char_name, char_gender, species_data, classes_data, save_player_data):
         player["game_active"] = False
         print("Character creation cancelled. Game not started.")
         # No return here, _apply_character_choices_and_stats returns bool but doesn't stop execution
@@ -553,41 +512,6 @@ def npc_combat_turn():
             player["special_cooldowns"][move] -= 1
 
 @trace_function_calls
-def award_item_to_player(item_id_to_give, source="unknown"):
-    if not isinstance(item_id_to_give, str):
-        error_msg = "[Error] Invalid item_id provided to award_item_to_player."
-        print(error_msg)
-        return error_msg # Return error message
-    player["inventory"].append(item_id_to_give)
-    item_details = items_data.get(item_id_to_give, {})
-    display_name = item_details.get("name", item_id_to_give.replace("_", " ").capitalize())
-    success_msg = f"You have acquired: {display_name}."
-    print(success_msg)
-    log_game_event("item_acquisition", {
-        "item_id": item_id_to_give, "item_name": display_name, "source": source,
-        "location_id": player.get("current_location_id")
-    })
-    return success_msg # Return success message
-
-@trace_function_calls
-def remove_item_from_player_inventory(item_id_to_remove, source="unknown"):
-    """Removes an item from the player's inventory and logs the event."""
-    if item_id_to_remove in player["inventory"]:
-        player["inventory"].remove(item_id_to_remove)
-        item_details = items_data.get(item_id_to_remove, {})
-        display_name = item_details.get("name", item_id_to_remove.replace("_", " ").capitalize())
-        log_game_event("item_removal", {
-            "item_id": item_id_to_remove,
-            "item_name": display_name,
-            "source": source,
-            "location_id": player.get("current_location_id")
-        })
-        # print(f"You no longer have: {display_name}.") # Optional: print removal message
-        return True
-    # print(f"[Warning] Tried to remove item '{item_id_to_remove}' but it was not in inventory.")
-    return False
-
-@trace_function_calls
 def handle_environmental_interaction(feature_id, action_verb):
     loc_data = locations[player["current_location_id"]]
     feature = loc_data.get("features", {}).get(feature_id)
@@ -615,17 +539,17 @@ def handle_environmental_interaction(feature_id, action_verb):
     print(chosen_outcome.get("message", "You interact with the object."))
     if chosen_outcome.get("type") == "item":
         # This part is for features that directly give an item upon a generic interaction.
-        award_item_to_player(chosen_outcome["item_id"], source=f"feature_interaction_{feature_id}_{action_verb}")
+        game_logic.award_item_to_player(player, items_data, chosen_outcome["item_id"], source=f"feature_interaction_{feature_id}_{action_verb}", log_event_func=log_game_event)
+
     elif chosen_outcome.get("type") == "reveal_items" and feature_id == "worn_crate":
         if feature.get("closed"):
             items_in_crate = list(feature.get("contains_on_open", [])) # Make a copy
             if items_in_crate:
                 print("You pry open the crate and find some items inside!") # Updated message
                 
-                acquired_item_names = []
                 for item_id in items_in_crate: # Iterate through items to award them
-                    award_item_to_player(item_id, source=f"opened_{feature_id}")
-                    acquired_item_names.append(items_data.get(item_id, {}).get("name", item_id))
+                    game_logic.award_item_to_player(player, items_data, item_id, source=f"opened_{feature_id}", log_event_func=log_game_event)
+                    # acquired_item_names.append(items_data.get(item_id, {}).get("name", item_id)) # Not strictly needed if award_item prints
                 
                 if player["current_location_id"] == "generic_start_room": # Specific message for starter crate
                      print("Among the items, you see a map of a nearby settlement and a small pouch of coins.") # Message adjusted
@@ -780,7 +704,7 @@ def run_minimal_web_server():
                     game_response["message"] = f"You picked up the {items_data.get(item_id_to_take, {}).get('name', item_id_to_take)} and gained {coin_value} copper coins."
                     room_items.remove(item_id_to_take)
                 else:
-                    award_message = award_item_to_player(item_id_to_take, source=f"take_room_web_{current_loc_id}")
+                    award_message = game_logic.award_item_to_player(player, items_data, item_id_to_take, source=f"take_room_web_{current_loc_id}", log_event_func=log_game_event)
                     game_response["message"] = award_message
                     room_items.remove(item_id_to_take)
                 
@@ -1004,10 +928,10 @@ def run_minimal_web_server():
         player_gender = data.get('player_gender')
 
         if not all([species_id, class_id, player_name, player_gender]):
-            print(f"DEBUG: Missing data in /api/create_character: {data}")
+            # print(f"DEBUG: Missing data in /api/create_character: {data}") # Keep for debugging if needed
             return jsonify({"error": "Missing character creation data."}), 400
 
-        if _apply_character_choices_and_stats(species_id, class_id, player_name, player_gender):
+        if game_logic.apply_character_choices_and_stats(player, species_id, class_id, player_name, player_gender, species_data, classes_data, save_player_data):
             player["game_active"] = True 
             species_info = species_data[player["species"]]
             
@@ -1069,7 +993,7 @@ def run_minimal_web_server():
 
             return jsonify(initial_scene_data)
         else:
-            print(f"DEBUG: _apply_character_choices_and_stats failed for web creation: {data}")
+            # print(f"DEBUG: apply_character_choices_and_stats failed for web creation: {data}")
             return jsonify({"error": "Failed to create character on server."}), 500
 
     @flask_app_instance.route('/api/load_character', methods=['POST'])
@@ -1443,7 +1367,7 @@ def process_command(full_command_input):
             return True
         current_zone = locations[player["current_location_id"]].get("zone")
         if current_zone in CITY_ZONES:
-            save_player_data(reason_for_save="Game progress manually saved")
+            save_player_data(player, reason_for_save="Game progress manually saved")
         else:
             print("You can only save your progress in a city.")
         return True # Command processed, show scene again
@@ -1643,7 +1567,7 @@ def process_command(full_command_input):
                         break 
             
             if item_to_take and item_to_take != "currency_handled":
-                award_item_to_player(item_to_take, source=f"take_room_{loc_id}") 
+                game_logic.award_item_to_player(player, items_data, item_to_take, source=f"take_room_{loc_id}", log_event_func=log_game_event) 
                 room_items.remove(item_to_take) # Remove from the original list
             elif not item_to_take: # Only print if not found and not handled as currency
                 print(f"There is no {item_name_input} here to take.")
@@ -1668,7 +1592,7 @@ def process_command(full_command_input):
                 if feature.get("locked") and feature.get("key_needed") == item_in_inv_id:
                     print(feature["unlock_message"])
                     feature["locked"] = False
-                    remove_item_from_player_inventory(item_in_inv_id, source=f"used_on_{target_feature_id}")
+                    game_logic.remove_item_from_player_inventory(player, items_data, item_in_inv_id, source=f"used_on_{target_feature_id}", log_event_func=log_game_event)
                     if "contains_item_on_unlock" in feature:
                         new_item = feature.pop("contains_item_on_unlock")
                         location_data.setdefault("items", []).append(new_item)
@@ -1697,11 +1621,10 @@ def process_command(full_command_input):
                 elif npc_data_found.get("type") == "quest_giver_simple":
                     if npc_data_found.get("quest_item_needed") in player["inventory"]:
                         print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_complete', 'Thank you!')}\"")
-                        remove_item_from_player_inventory(npc_data_found["quest_item_needed"], source=f"quest_turn_in_{found_npc_id}")
+                        game_logic.remove_item_from_player_inventory(player, items_data, npc_data_found["quest_item_needed"], source=f"quest_turn_in_{found_npc_id}", log_event_func=log_game_event)
                         if npc_data_found.get("quest_reward_item"):
-                            # award_item_to_player is already called and logs "item_acquisition"
-                            # which covers "player is rewarded with"
-                            award_item_to_player(npc_data_found["quest_reward_item"], source=f"quest_reward_{found_npc_id}")
+                            game_logic.award_item_to_player(player, items_data, npc_data_found["quest_reward_item"], source=f"quest_reward_{found_npc_id}", log_event_func=log_game_event)
+
                         # If there's a currency reward for the quest
                         if npc_data_found.get("quest_reward_currency"):
                             log_game_event("currency_gained", {"amount": npc_data_found["quest_reward_currency"], "source": f"quest_reward_{found_npc_id}", "location_id": loc_id})
