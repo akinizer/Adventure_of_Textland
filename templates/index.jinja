@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text RPG - Browser Version</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Text RPG - Browser Version</h1>
+        <div id="character-creation-area">
+            <!-- Content will be dynamically loaded here -->
+        </div>
+        <div id="settings-button-container" style="display: none;">
+            <button id="settings-gear-button">⚙️</button>
+        </div>
+        <div id="game-interface" style="display: none;"> <!-- Initially hidden -->
+            <div id="dynamic-header-info" style="padding: 5px; margin-bottom: 5px; border: 1px solid #ccc; font-weight: bold; background-color: #e9ecef;">
+                <!-- Dynamic header will be populated here by JS -->
+            </div>
+            <div id="main-game-content-area" style="display: flex; margin-bottom: 10px;">
+                <div id="character-panel" style="width: 250px; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9; height: 322px; /* Match output-area height */ overflow-y: auto; margin-right: 10px;">
+                    <h4 style="margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Character</h4>
+                    <div id="char-panel-stats" style="margin-bottom: 15px;">
+                        <div id="char-panel-name">Name: N/A</div>
+                        <div id="char-panel-class">Class: N/A</div>
+                        <div id="char-panel-species">Species: N/A</div>
+                        <div id="char-panel-level">Level: N/A</div>
+                        <div id="char-panel-xp">XP: N/A / N/A</div>
+                        <div id="char-panel-hp">HP: N/A / N/A</div>
+                        <div id="char-panel-attack">Attack: N/A</div>
+                        <div id="char-panel-coins">Coins: N/A</div>
+                    </div>
+                    <h5 style="margin-bottom: 5px; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 3px;">Equipment</h5>
+                    <div id="char-panel-equipment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em;">
+                        <div id="char-panel-equip-head" class="equip-slot" title="Head" data-slot-key="head">H: Empty</div>
+                        <div id="char-panel-equip-shoulders" class="equip-slot" title="Shoulders" data-slot-key="shoulders">S: Empty</div>
+                        <div id="char-panel-equip-chest" class="equip-slot" title="Chest" data-slot-key="chest">C: Empty</div>
+                        <div id="char-panel-equip-hands" class="equip-slot" title="Hands" data-slot-key="hands">G: Empty</div>
+                        <div id="char-panel-equip-legs" class="equip-slot" title="Legs" data-slot-key="legs">L: Empty</div>
+                        <div id="char-panel-equip-feet" class="equip-slot" title="Feet" data-slot-key="feet">F: Empty</div>
+                        <div id="char-panel-equip-main_hand" class="equip-slot" title="Main Hand" data-slot-key="main_hand">MH: Empty</div>
+                        <div id="char-panel-equip-off_hand" class="equip-slot" title="Off-Hand" data-slot-key="off_hand">OH: Empty</div>
+                    </div>
+
+                </div>
+                <div id="game-output" class="output-area" style="flex-grow: 1;">
+                    <!-- Game messages will appear here -->
+                </div>
+            </div>
+            <div class="actions-panel">
+                <p><strong>Common Actions:</strong></p>
+                <button onclick="performAction('inventory')">Check Inventory</button>
+                <button onclick="performAction('!map')">View Map</button>
+            </div>
+            <div id="game-actions-panel" class="actions-panel" style="display: none;">
+                <p><strong>Game Actions:</strong></p>
+                <!-- Save button will go here -->
+            </div>
+            <div class="actions-panel">
+                <p><strong>Movement:</strong> (Would show available directions)</p>
+                <button onclick="performAction('go north')">Go North</button>
+                <button onclick="performAction('go south')">Go South</button>
+                <button onclick="performAction('go east')">Go East</button>
+                <button onclick="performAction('go west')">Go West</button>
+            </div>
+            <div class="actions-panel dynamic-options">
+                <p><strong>Interactions:</strong> (Would show available items/NPCs/features)</p>
+                <button onclick="performAction('talk <npc_example>')">Talk to NPC</button>
+                <button onclick="performAction('use <item> on <feature>')">Use Item On...</button>
+            </div>
+            <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
+        </div>
+        <div id="feature-interactions-panel" class="actions-panel" style="display: none;">
+            <p><strong>Room Features:</strong></p>
+            <!-- Dynamic feature buttons will go here -->
+        </div>
+        <div id="room-items-panel" class="actions-panel" style="display: none;">
+            <p><strong>Items on the ground:</strong></p>
+            <div><!-- Dynamic item buttons will go here --></div>
+        </div>
+        <div id="pause-overlay">PAUSED</div>
+    </div>
+    <script>const MAX_NAME_LENGTH = {{ max_name_length }};</script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

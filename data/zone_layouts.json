@@ -1,0 +1,12 @@
+{
+    "Eldoria": {
+        "title": "Map of Eldoria",
+        "grid": [ "           ", "  [M]----[S]", "   |      | ", "   +-----[G]", "           " ],
+        "mapping": { "M": "eldoria_market", "S": "eldoria_square", "G": "eldoria_south_gate" }
+    },
+    "Riverford": {
+        "title": "Map of Riverford",
+        "grid": [ "           ", "  [S]----[D]", "   |       ", "  [N]      ", "           " ],
+        "mapping": { "S": "riverford_square", "D": "riverford_docks", "N": "riverford_north_gate" }
+    }
+}

@@ -1,0 +1,268 @@
+{
+    "eldoria_square": {
+        "name": "Eldoria Town Square",
+        "zone": "Eldoria",
+        "description": "The bustling heart of Eldoria. A grand fountain stands in the center. Paths lead east to the market and south towards the city gate.",
+        "exits": {"east": "eldoria_market", "south": "eldoria_south_gate"},
+        "items": ["shiny_coin", "healing_potion"],
+        "npcs": {
+            "elder_maeve": {
+                "name": "Elder Maeve",
+                "description": "A wise-looking woman with kind eyes, sitting by the town fountain.",
+                "dialogue": "Hey you there, I am looking for an adventurer. We've had reports of strange creatures in the Whispering Woods. Could you investigate?",
+                "type": "quest_giver",
+                "hostile": false
+            },
+            "guard_thomas": {
+                "name": "Guard Thomas",
+                "description": "A stern-faced guard in polished armor, watching over the square.",
+                "dialogue": "Keep the peace, citizen. If you need help, Elder Maeve is wise, or check the market for goods.",
+                "type": "neutral",
+                "hostile": false
+            }
+        }
+    },
+    "eldoria_market": {
+        "name": "Eldoria Market",
+        "zone": "Eldoria",
+        "description": "A vibrant street filled with stalls. Merchants call out, offering various goods. The town square is to the west.",
+        "exits": {"west": "eldoria_square"},
+        "items": ["apple", "bread_loaf"],
+        "npcs": {
+            "merchant_sarah": {
+                "name": "Merchant Sarah",
+                "description": "A cheerful merchant with a wide array of goods on display.",
+                "dialogue": "Welcome to my stall! Finest goods in Eldoria!",
+                "type": "vendor",
+                "hostile": false
+            },
+            "grumpy_old_man": {
+                "name": "Grumpy Old Man",
+                "description": "An old man muttering to himself on a bench, eyeing passersby with suspicion.",
+                "dialogue": "Hmph. Get away from me, you bother.",
+                "type": "dismissive",
+                "hostile": false
+            }
+        }
+    },
+    "eldoria_south_gate": {
+        "name": "Eldoria South Gate",
+        "zone": "Eldoria",
+        "description": "Massive wooden gates mark the southern exit of Eldoria. A well-worn path leads south into the countryside. The town square is to the north.",
+        "exits": {"north": "eldoria_square", "south": "southern_road_1"},
+        "npcs": {}
+    },
+    "southern_road_1": {
+        "name": "Southern Road - Part 1",
+        "zone": "SouthernRoad",
+        "description": "You are on a dusty road leading south from Eldoria. Fields stretch to either side. To the east, you spot the dark opening of a cave. The road continues south.",
+        "exits": {"north": "eldoria_south_gate", "south": "southern_road_2", "east": "gloomy_cave_entrance"},
+        "items": [],
+        "npcs": {}
+    },
+    "gloomy_cave_entrance": {
+        "name": "Gloomy Cave Entrance",
+        "zone": "SouthernRoad",
+        "description": "The air is cold and damp around this dark cave mouth. Strange noises echo from within. This looks like a dangerous place.",
+        "exits": {"west": "southern_road_1"},
+        "items": ["rusty_key"],
+        "features": {
+            "loose_rocks": {
+                "description": "A pile of loose rocks near the entrance. They look unstable.",
+                "actions": {
+                    "search": {
+                        "outcomes": [
+                            {"type": "message", "message": "You sift through the rocks but find nothing of interest."},
+                            {"type": "item", "item_id": "grimy_coin", "message": "You find a grimy old coin hidden amongst the rocks!"}
+                        ],
+                        "probabilities": [0.7, 0.3]
+                    },
+                    "kick": {
+                        "outcomes": [{"type": "message", "message": "You kick the rocks. A few skitter away. Nothing else happens."}]
+                    }
+                }
+            }
+        },
+        "npcs": {
+            "cave_lurker": {
+                "name": "Cave Lurker",
+                "description": "A shadowy figure with glowing eyes, partially hidden in the darkness.",
+                "dialogue": "*A guttural growl echoes from the shadows... It lunges!*",
+                "type": "mob",
+                "hostile": true,
+                "hp": 30,
+                "max_hp": 30,
+                "attack_power": 5,
+                "loot": ["tattered_pelt"]
+            }
+        }
+    },
+    "southern_road_2": {
+        "name": "Southern Road - Part 2",
+        "zone": "SouthernRoad",
+        "description": "The road continues south. In the distance, you can see the town of Riverford nestled by a river. The path north leads back towards Eldoria.",
+        "exits": {"north": "southern_road_1", "south": "riverford_north_gate"},
+        "items": [],
+        "npcs": {}
+    },
+    "riverford_north_gate": {
+        "name": "Riverford North Gate",
+        "zone": "Riverford",
+        "description": "You stand at the northern gate of Riverford. The town looks quieter than Eldoria. The main square is to the south.",
+        "exits": {"north": "southern_road_2", "south": "riverford_square"},
+        "npcs": {}
+    },
+    "riverford_square": {
+        "name": "Riverford Town Square",
+        "zone": "Riverford",
+        "description": "A quaint town square with a small, bubbling spring. A few townsfolk go about their business. The docks are to the east.",
+        "exits": {"north": "riverford_north_gate", "east": "riverford_docks"},
+        "items": [],
+        "npcs": {
+            "concerned_villager": {
+                "name": "Concerned Villager",
+                "description": "A villager who keeps glancing around nervously, clutching a small note.",
+                "dialogue": "Psst, come here stranger. I have urgent news about the goings-on in the MurkWaste Swamp!",
+                "type": "quest_giver_urgent",
+                "hostile": false
+            }
+        }
+    },
+    "riverford_docks": {
+        "name": "Riverford Docks",
+        "zone": "Riverford",
+        "description": "Wooden planks form a series of docks along the river. Fishing boats are moored here. The town square is to the west.",
+        "exits": {"west": "riverford_square"},
+        "items": ["fishing_net_scraps"],
+        "npcs": {
+            "old_fisherman": {
+                "name": "Old Fisherman",
+                "description": "An old fisherman mending his nets, he doesn't look up from his work.",
+                "dialogue": "Hmph. River's been quiet lately... too quiet.",
+                "type": "dismissive_hint",
+                "hostile": false
+            }
+        }
+    },
+     "deep_woods": {
+        "name": "Deep Woods",
+        "zone": "WhisperingWoods",
+        "description": "You are deep within the woods. It's eerily quiet. The path back south is the only clear way out.\nYou spot a small, old chest on the ground.",
+        "exits": {"south": "forest_entrance_placeholder"},
+        "items": [],
+        "features": {
+            "chest": {
+                "description_locked": "A small, old wooden chest, bound with iron. It appears to be locked.",
+                "description_unlocked": "The chest is open. It's empty now.",
+                "locked": true,
+                "key_needed": "rusty_key",
+                "unlock_message": "You use the rusty_key. With a satisfying *click*, the chest unlocks!",
+                "contains_item_on_unlock": "golden_amulet"
+            }
+        },
+        "npcs": {}
+    },
+    "forest_entrance_placeholder": {
+        "name": "Edge of the Deep Woods",
+        "zone": "WhisperingWoods",
+        "description": "You are at an entrance to the Deep Woods. It looks untamed.",
+        "exits": {"north": "deep_woods", "east": "whispering_woods_path"},
+        "items": ["strange_berries"],
+        "npcs": {
+            "nervous_scout": {
+                "name": "Nervous Scout",
+                "description": "A scout pacing back and forth, muttering about 'the beast'.",
+                "hostile": false,
+                "dialogue": "You there! Have you seen it? The... the beast of the woods! It took my lucky charm!",
+                "type": "quest_giver_simple",
+                "quest_item_needed": "lucky_charm_figurine",
+                "quest_reward_item": "scouts_map_fragment",
+                "dialogue_after_quest_incomplete": "Please, find my lucky charm! I can't go on without it.",
+                "dialogue_after_quest_complete": "My charm! You found it! Oh, thank you! Here, take this for your trouble."
+            }
+        }
+    },
+    "whispering_woods_path": {
+        "name": "Whispering Woods Path",
+        "zone": "WhisperingWoods",
+        "description": "A winding path through the Whispering Woods. Sunlight dapples through the leaves. You hear rustling nearby.",
+        "exits": {"west": "forest_entrance_placeholder", "east": "ancient_grove"},
+        "items": [],
+        "features": {
+            "glowing_mushroom_patch": {
+                "description": "A patch of faintly glowing mushrooms.",
+                "actions": {
+                    "pick": {
+                        "outcomes": [
+                            {"type": "item", "item_id": "glowing_mushroom", "message": "You carefully pick a glowing mushroom."},
+                            {"type": "message", "stat_effect_temp": "dizzy", "message": "You pick a mushroom, and a puff of spores makes you feel dizzy for a moment."}
+                        ],
+                        "probabilities": [0.8, 0.2]
+                    }
+                }
+            },
+            "hollow_log": {
+                "description": "An old, hollow log lies by the path.",
+                "actions": {"search": {"outcomes": [{"type": "item", "item_id": "lucky_charm_figurine", "message": "You search the hollow log and find a small, carved figurine!"}]}}
+            }
+        },
+        "npcs": {
+            "wandering_spirit": {
+                "name": "Wandering Spirit",
+                "description": "A translucent figure that seems to hum a sad tune.",
+                "hostile": false,
+                "type": "easter_egg",
+                "dialogue": "Lost... so long lost... Have you seen the silver locket that shines like the moon?"
+            },
+            "territorial_boar": {
+                "name": "Territorial Boar",
+                "description": "A large, angry-looking boar, snorting and pawing the ground.",
+                "hostile": true,
+                "hp": 40, "max_hp": 40, "attack_power": 8, "loot": ["boar_tusk", "raw_meat"],
+                "pre_combat_dialogue": "The boar glares at you, lets out a loud snort, and seems ready to charge.",
+                "dialogue_options": {
+                    "1": {"text": "Try to calm it down.", "action": "attempt_calm", "response": "You try to soothe the boar, but it only seems to enrage it further! It charges!" , "triggers_combat": true},
+                    "2": {"text": "Slowly back away.", "action": "back_away", "response": "You slowly back away. The boar watches you intently but doesn't follow. You avoid a fight... for now.", "triggers_combat": false, "action_type": "end_conversation"},
+                    "3": {"text": "Attack the boar!", "action": "initiate_combat", "response": "You ready your weapon and charge the boar!", "triggers_combat": true}
+                }
+            }
+        }
+    },
+    "ancient_grove": {
+        "name": "Ancient Grove",
+        "zone": "WhisperingWoods",
+        "description": "A serene grove with a very old, wise-looking tree at its center.",
+        "exits": {"west": "whispering_woods_path"},
+        "features": {
+            "wise_old_tree": {
+                "description": "A truly ancient tree. It seems to radiate a calm energy.",
+                "actions": {
+                    "touch": {"outcomes": [{"type": "message", "message": "You touch the ancient bark and feel a sense of peace wash over you."}]},
+                    "rest": {"outcomes": [{"type": "stat_change", "stat": "hp", "amount": 10, "message": "You rest under the wise old tree and recover 10 HP."}]}
+                }
+            }
+        },
+        "npcs": {}
+    },
+    "generic_start_room": {
+        "name": "Dimly Lit Chamber",
+        "zone": "StartingZone",
+        "description": "This small, stone chamber is cold and damp. A faint light filters in from a crack in the ceiling. There's a worn wooden crate in one corner.",
+        "exits": {"out": "eldoria_square"},
+        "items": [],
+        "features": {
+            "worn_crate": {
+                "description_closed": "A worn wooden crate. It seems easy to open.",
+                "description_opened": "The crate is now open and empty.",
+                "closed": true,
+                "actions": {
+                    "open": {
+                        "outcomes": [{"type": "reveal_items", "message": "You pry open the crate."}]
+                    }
+                },
+                "contains_on_open": []
+            }
+        },
+        "npcs": {}
+    }
+}

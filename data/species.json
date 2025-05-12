@@ -1,0 +1,20 @@
+{
+    "human": {
+        "name": "Human", "description": "Adaptable and versatile.",
+        "stat_bonuses": {"hp_bonus": 5, "attack_bonus": 1},
+        "starting_location_tag": "generic_start",
+        "backstory_intro": "You awaken with a gasp, memories hazy, a sense of urgency pricking at you."
+    },
+    "elf": {
+        "name": "Elf", "description": "Graceful and attuned to nature.",
+        "stat_bonuses": {"attack_bonus": 2, "special_power_bonus": 5},
+        "starting_location_tag": "forest_start",
+        "backstory_intro": "Sunlight dapples through ancient leaves, stirring you from a deep slumber."
+    },
+    "orc": {
+        "name": "Orc", "description": "Strong and resilient.",
+        "stat_bonuses": {"hp_bonus": 10, "attack_bonus": 3},
+        "starting_location_tag": "rugged_start",
+        "backstory_intro": "The clang of distant metal and the smell of smoke rouse you. Your muscles ache."
+    }
+}
