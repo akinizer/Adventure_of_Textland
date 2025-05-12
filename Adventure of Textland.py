@@ -368,7 +368,7 @@ def initialize_game_state():
     print(f"\n{species_info['backstory_intro']}")
 
     start_room_id = "generic_start_room" 
-    player.move_to(start_room_id)
+    player.move_to(start_room_id) # Player object's method
     class_info = classes_data[player.class_id]
     if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
         locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info["starter_items"])
@@ -377,21 +377,13 @@ def initialize_game_state():
     print(f"You feel a pull towards the {locations[start_room_id]['name']}.")
 
 def start_combat(npc_id):
-    player.combat_target_id = npc_id
+    player.enter_combat(npc_id) # Player object's method
     current_loc_npcs = locations[player.current_location_id].get("npcs", {})
     if npc_id not in current_loc_npcs or not current_loc_npcs[npc_id].get("hp"):
         return
     npc_data = current_loc_npcs[npc_id]
     print(f"\n--- COMBAT START ---")
     print(f"You are attacked by {npc_data['name']}!")
-
-def handle_player_defeat():
-    print("\nYour vision fades... You have been defeated.")
-    print("--- GAME OVER ---")
-    player.game_active = False
-    player.dialogue_npc_id = None
-    player.dialogue_options_pending = {}
-    player.combat_target_id = None
 
 def handle_npc_defeat(npc_id):
     current_loc_data = locations[player.current_location_id]
@@ -419,9 +411,7 @@ def handle_npc_defeat(npc_id):
     player.add_xp(xp_reward, log_event_func=log_game_event)
 
     del current_loc_data["npcs"][npc_id]
-    player.combat_target_id = None
-    player.dialogue_npc_id = None
-    player.dialogue_options_pending = {}
+    player.leave_combat() # Player object's method
 
 def npc_combat_turn():
     if not player.combat_target_id or not player.game_active:
@@ -444,14 +434,14 @@ def npc_combat_turn():
     if player.is_deflecting:
         damage_to_player = max(0, damage_to_player // 2) 
         print(f"You deflect part of the blow!")
-        player.is_deflecting = False
+        player.set_deflecting(False) # Player object's method
 
     player.take_damage(damage_to_player) # Use method
     print(f"{npc_data['name']} attacks you for {damage_to_player} damage.")
     print(f"You have {player.hp}/{player.max_hp} HP remaining.")
 
     if player.hp <= 0:
-        handle_player_defeat()
+        player.handle_defeat() # Player object's method
     
     player.update_special_cooldowns()
 
@@ -685,10 +675,9 @@ def run_minimal_web_server():
             item_id_found_in_equipment = None
             slot_unequipped_from = None
             player_equipment_data = player.equipment
-            for slot, item_id in player_equipment_data.items():
-                if item_id == item_id_to_unequip: # Match by item ID
-                    item_id_found_in_equipment = item_id
-                    slot_unequipped_from = slot
+            for slot_key, equipped_item_id in player_equipment_data.items():
+                if equipped_item_id == item_id_to_unequip: # Match by item ID
+                    slot_unequipped_from = slot_key
                     break
 
             if item_id_found_in_equipment:
@@ -696,9 +685,7 @@ def run_minimal_web_server():
                 player.equipment[slot_unequipped_from] = None
                 game_response["message"] = f"You unequipped {items_data.get(item_id_found_in_equipment,{}).get('name', item_id_found_in_equipment)} from your {slot_unequipped_from.replace('_', ' ')} slot."
                 log_game_event("item_unequipped", {"item_id": item_id_found_in_equipment, "slot": slot_unequipped_from, "moved_to_inventory": True})
-                # TODO: Adjust player stats based on unequipped item
             else:
-                # This case might happen if the client state is out of sync or item wasn't equipped
                 game_response["message"] = f"That item doesn't seem to be equipped."
             
             # Ensure current location data is still part of the response
@@ -712,20 +699,8 @@ def run_minimal_web_server():
                 item_details = items_data.get(item_id_to_equip)
                 if item_details and item_details.get("equip_slot"):
                     slot_to_equip_to = item_details["equip_slot"]
-                    
-                    # Unequip current item in that slot, if any
-                    currently_equipped_item_id = player.equipment.get(slot_to_equip_to)
-                    if currently_equipped_item_id:
-                        player.add_item_to_inventory(currently_equipped_item_id)
-                        # Log unequip event if needed
-                        log_game_event("item_unequipped", {"item_id": currently_equipped_item_id, "slot": slot_to_equip_to, "moved_to_inventory": True})
-                        game_response["message"] = f"You unequipped {items_data.get(currently_equipped_item_id,{}).get('name', currently_equipped_item_id)}.\n"
-                    
-                    player.equip_item(item_id_to_equip, slot_to_equip_to, item_details.get('name', item_id_to_equip))
-                    player.remove_item_from_inventory(item_id_to_equip)
-                    game_response["message"] += f"You equipped {item_details.get('name', item_id_to_equip)}."
-                    log_game_event("item_equipped", {"item_id": item_id_to_equip, "slot": slot_to_equip_to})
-                    # TODO: Adjust player stats based on equipped item
+                    equip_message = player.equip_item(item_id_to_equip, slot_to_equip_to, items_data, log_event_func=log_game_event)
+                    game_response["message"] = equip_message
                 else:
                     game_response["message"] = f"You cannot equip {items_data.get(item_id_to_equip,{}).get('name', item_id_to_equip)}."
             else:
@@ -1332,8 +1307,7 @@ def process_command(full_command_input):
         
         if full_command == "leave":
             print(f"You end the conversation with {npc_data['name']}.")
-            player.dialogue_npc_id = None
-            player.dialogue_options_pending = {}
+            player.end_dialogue() # Player object's method
             return True
 
         chosen_option_data = player.dialogue_options_pending.get(full_command)
@@ -1343,12 +1317,10 @@ def process_command(full_command_input):
                 print(f"{npc_data['name']} says: \"{chosen_option_data['response']}\"")
             
             if chosen_option_data.get("triggers_combat"):
-                player.dialogue_npc_id = None
-                player.dialogue_options_pending = {}
-                start_combat(npc_id)
+                player.end_dialogue() # End dialogue before starting combat
+                player.enter_combat(npc_id) # Player object's method
             elif chosen_option_data.get("action_type") == "end_conversation":
-                player.dialogue_npc_id = None
-                player.dialogue_options_pending = {}
+                player.end_dialogue() # Player object's method
         else:
             print("Invalid choice. Please type the number of the option or 'leave'.")
         return True 
@@ -1357,7 +1329,7 @@ def process_command(full_command_input):
         npc_id = player.combat_target_id
         if npc_id not in locations[player.current_location_id]["npcs"]:
             print(f"[Warning] Target {npc_id} seems to be gone. Ending combat.")
-            player.combat_target_id = None
+            player.leave_combat() # Player object's method
             return True 
 
         npc_data = locations[player.current_location_id]["npcs"][npc_id]
@@ -1389,7 +1361,7 @@ def process_command(full_command_input):
                 else:
                     print(f"You don't know a special move called '{' '.join(args)}'.")
         elif command == "deflect":
-            player.is_deflecting = True
+            player.set_deflecting(True) # Player object's method
             print("You brace yourself, preparing to deflect the next attack.")
             action_taken = True
         elif command == "item":
@@ -1438,9 +1410,8 @@ def process_command(full_command_input):
                     slot_unequipped_from = slot
                     break
             if item_id_to_unequip:
-                player.add_item_to_inventory(item_id_to_unequip)
-                player.equipment[slot_unequipped_from] = None
-                print(f"You unequipped {items_data.get(item_id_to_unequip,{}).get('name', item_id_to_unequip)} from your {slot_unequipped_from.replace('_', ' ')} slot.")
+                unequip_message = player.unequip_item(slot_unequipped_from, items_data, log_event_func=log_game_event)
+                print(unequip_message)
             else:
                 print(f"You don't have '{item_name_input}' equipped.")
         return True # Command processed, show scene again
@@ -1558,8 +1529,7 @@ def process_command(full_command_input):
                 print(f"\nYou approach {npc_data_found['name']}.")
                 if npc_data_found.get("pre_combat_dialogue") and npc_data_found.get("dialogue_options"):
                     print(f"{npc_data_found['name']} says: \"{npc_data_found['pre_combat_dialogue']}\"")
-                    player.dialogue_npc_id = found_npc_id
-                    player.dialogue_options_pending = npc_data_found["dialogue_options"]
+                    player.start_dialogue(found_npc_id, npc_data_found["dialogue_options"]) # Player object's method
                 elif npc_data_found.get("type") == "quest_giver_simple":
                     if npc_data_found.get("quest_item_needed") in player.inventory:
                         print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_complete', 'Thank you!')}\"")
@@ -1575,7 +1545,7 @@ def process_command(full_command_input):
                         print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_incomplete', npc_data_found['dialogue'])}\"")
                 elif npc_data_found.get("hostile"): 
                     print(npc_data_found['dialogue']) 
-                    start_combat(found_npc_id) 
+                    player.enter_combat(found_npc_id) # Player object's method
                 elif npc_data_found.get("type") == "vendor":
                     print(VENDOR_STALL_VISUAL)
                     print(f"{npc_data_found['name']} says: \"{npc_data_found['dialogue']}\"")

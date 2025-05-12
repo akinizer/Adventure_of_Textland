@@ -31,6 +31,25 @@ class Player:
         }
         self.is_paused = False
 
+    def set_active(self, is_active):
+        self.game_active = is_active
+
+    def enter_combat(self, target_id):
+        self.combat_target_id = target_id
+        self.end_dialogue() # Cannot be in dialogue and combat
+
+    def leave_combat(self):
+        self.combat_target_id = None
+
+    def start_dialogue(self, npc_id, options):
+        self.dialogue_npc_id = npc_id
+        self.dialogue_options_pending = options
+        self.leave_combat() # Cannot be in combat and dialogue
+
+    def end_dialogue(self):
+        self.dialogue_npc_id = None
+        self.dialogue_options_pending = {}
+
     def move_to(self, new_location_id):
         self.current_location_id = new_location_id
         # print(f"{self.name} moves to {new_location_id}.")
@@ -58,11 +77,41 @@ class Player:
             return True
         return False
 
-    def equip_item(self, item_id, slot, item_name="Unknown Item"):
-        # Basic equip, assumes item is valid for slot.
-        # More complex logic (unequipping old, stat changes) would go here or be called from here.
-        self.equipment[slot] = item_id
-        # print(f"{item_name} equipped to {slot}.")
+    def equip_item(self, item_id_to_equip, slot_to_equip_to, items_master_data, log_event_func=None):
+        """Equips an item, handling unequip of existing item and inventory."""
+        item_details = items_master_data.get(item_id_to_equip)
+        if not item_details or item_details.get("equip_slot") != slot_to_equip_to:
+            return f"Cannot equip {item_details.get('name', item_id_to_equip)} to {slot_to_equip_to}."
+
+        message = ""
+        # Unequip current item in that slot, if any
+        currently_equipped_item_id = self.equipment.get(slot_to_equip_to)
+        if currently_equipped_item_id:
+            self.add_item_to_inventory(currently_equipped_item_id)
+            if log_event_func:
+                log_event_func("item_unequipped", {"item_id": currently_equipped_item_id, "slot": slot_to_equip_to, "moved_to_inventory": True, "player_name": self.name})
+            message += f"You unequipped {items_master_data.get(currently_equipped_item_id,{}).get('name', currently_equipped_item_id)}.\n"
+        
+        self.equipment[slot_to_equip_to] = item_id_to_equip
+        self.remove_item_from_inventory(item_id_to_equip) # Assumes item was in inventory
+        message += f"You equipped {item_details.get('name', item_id_to_equip)}."
+        if log_event_func:
+            log_event_func("item_equipped", {"item_id": item_id_to_equip, "slot": slot_to_equip_to, "player_name": self.name})
+        # TODO: Adjust player stats based on equipped item
+        return message
+
+    def unequip_item(self, slot_key, items_master_data, log_event_func=None):
+        """Unequips an item from a given slot and adds it to inventory."""
+        item_id_to_unequip = self.equipment.get(slot_key)
+        if item_id_to_unequip:
+            self.add_item_to_inventory(item_id_to_unequip)
+            self.equipment[slot_key] = None
+            item_name = items_master_data.get(item_id_to_unequip, {}).get("name", item_id_to_unequip)
+            if log_event_func:
+                log_event_func("item_unequipped", {"item_id": item_id_to_unequip, "slot": slot_key, "moved_to_inventory": True, "player_name": self.name})
+            # TODO: Adjust player stats based on unequipped item
+            return f"You unequipped {item_name} from your {slot_key.replace('_', ' ')} slot."
+        return f"Nothing equipped in {slot_key.replace('_', ' ')} slot."
 
     def add_xp(self, amount, log_event_func=None):
         """Awards XP to the player and handles leveling up."""
@@ -103,3 +152,13 @@ class Player:
         for move in self.special_cooldowns:
             if self.special_cooldowns[move] > 0:
                 self.special_cooldowns[move] -= 1
+
+    def set_deflecting(self, is_deflecting_flag):
+        self.is_deflecting = is_deflecting_flag
+
+    def handle_defeat(self):
+        print("\nYour vision fades... You have been defeated.")
+        print("--- GAME OVER ---")
+        self.set_active(False)
+        self.end_dialogue()
+        self.leave_combat()
