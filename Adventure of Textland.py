@@ -1359,18 +1359,40 @@ def run_minimal_web_server():
                     showInitialCharacterScreen();
                 }
                 async function attemptResumeSession(characterName) {
-                    // This is very similar to handleLoadCharacter, but assumes server still has the player state
-                    // or can reload it silently.
                     console.log("Attempting to resume session for:", characterName);
-                    // We'll use a generic action to fetch the current scene for the already active player
-                    // The backend's process_game_action will use the existing global `player` object.
-                    // If the server restarted, this would need more robust handling,
-                    // perhaps by calling /api/load_character if player.name doesn't match.
-                    await performAction('look'); // 'look' is a good way to get current scene data
-                    document.getElementById('character-creation-area').style.display = 'none';
-                    document.getElementById('game-interface').style.display = 'block';
-                    document.getElementById('settings-button-container').style.display = 'block';
-                    gameIsActiveForInput = true;
+                    const creationArea = document.getElementById('character-creation-area');
+                    const gameInterface = document.getElementById('game-interface');
+                    const outputElement = document.getElementById('game-output');
+                    outputElement.innerHTML = `<p>Resuming session for ${characterName}...</p>`;
+
+                    try {
+                        const response = await fetch('/api/resume_session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ character_name: characterName })
+                        });
+                        if (!response.ok) {
+                            // If resume fails (e.g. server restarted and lost in-memory state, or char name mismatch)
+                            // fall back to full load.
+                            console.warn(`Resume session failed with status ${response.status}. Attempting full load.`);
+                            throw new Error(`Resume failed, try full load.`);
+                        }
+                        const resumedSceneData = await response.json();
+
+                        creationArea.style.display = 'none';
+                        gameInterface.style.display = 'block';
+                        outputElement.innerHTML = ''; 
+                        displaySceneData(resumedSceneData, `Session resumed for ${characterName}.`);
+                        document.getElementById('settings-button-container').style.display = 'block';
+                        sessionStorage.setItem(SESSION_STORAGE_GAME_ACTIVE_KEY, 'true'); // Re-affirm session
+                        sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName); // Re-affirm character
+                        gameIsActiveForInput = true;
+                    } catch (error) {
+                        console.error("Error resuming session directly, trying full load:", error);
+                        // Fallback to full load if direct resume fails
+                        // This ensures that if the server restarted, we still try to load from file.
+                        await handleLoadCharacter(characterName);
+                    }
                 }
 
                 async function performAction(actionString) { 
@@ -1547,32 +1569,12 @@ def run_minimal_web_server():
 
                 // Initial load
                 window.onload = () => {
-                    showInitialCharacterScreen(); // Start with character selection/load screen
+                    // showInitialCharacterScreen(); // REMOVE THIS UNCONDITIONAL CALL
                     const isGameSessionActive = sessionStorage.getItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
                     const activeCharName = sessionStorage.getItem(SESSION_STORAGE_CHAR_NAME_KEY);
 
                     if (isGameSessionActive === 'true' && activeCharName) {
-                        // Attempt to resume the game session
-                        // We need to ensure the server-side 'player' object is correctly populated.
-                        // A simple 'look' action might suffice if the server's player state is persistent.
-                        // For robustness, we might need a dedicated "resume_session" API endpoint
-                        // that re-validates/re-loads the character on the server if needed.
-                        // For now, let's assume the server's 'player' object is still valid.
-                        // We'll call a function that effectively reloads the character on the server
-                        // and then displays the game interface.
-                        // This is a simplified approach. A robust solution might involve
-                        // the server checking if player.name matches activeCharName.
-                        console.log(`Found active session for ${activeCharName}. Attempting to resume.`);
-                        // We need to make sure the server's global `player` object is set correctly.
-                        // The simplest way for now is to re-trigger the load character logic,
-                        // but silently, or have a dedicated "get_current_game_state_for_session" endpoint.
-
-                        // Let's try to re-load the character to ensure server state is correct.
-                        // This will also set gameIsActiveForInput = true.
-                        handleLoadCharacter(activeCharName).then(() => {
-                            // If handleLoadCharacter is successful, it will show the game interface.
-                            // If it fails (e.g., character data deleted server-side), it will show an error,
-                            // and the user might need to go back to main menu.
+                        attemptResumeSession(activeCharName).then(() => {
                             console.log("Session resume attempt finished.");
                         }).catch(error => {
                             console.error("Error resuming session by reloading character:", error);
@@ -1942,6 +1944,43 @@ def run_minimal_web_server():
             ]
             return jsonify(loaded_scene_data)
         return jsonify({"error": f"Failed to load character '{character_name}'."}), 404
+
+    @flask_app_instance.route('/api/resume_session', methods=['POST'])
+    def resume_session_route():
+        data = request.get_json()
+        character_name_from_client = data.get('character_name')
+
+        # Check if server's current player matches the client's expected character
+        if player.get("game_active") and player.get("name") == character_name_from_client:
+            # Server state is consistent with client's session, return current state
+            current_loc_id = player.get("current_location_id")
+            current_loc_data = locations.get(current_loc_id, {})
+            
+            scene_data = {
+                "message": f"Session continued for {player.get('name')}.",
+                "player_hp": player.get("hp"),
+                "player_name": player.get("name"),
+                "player_max_hp": player.get("max_hp"),
+                "location_name": current_loc_data.get("name"),
+                "description": current_loc_data.get("description"),
+                "player_coins": player.get("coins", 0),
+                "player_level": player.get("level", 1),
+                "interactable_features": [], # Populate these like in process_game_action
+                "room_items": []
+            }
+            # Populate features and items (similar to process_game_action_route's final assembly)
+            features_in_room = current_loc_data.get("features", {})
+            for f_id, f_data in features_in_room.items():
+                # Simplified: send all actions. Refine if needed.
+                for action_verb in f_data.get("actions", {}).keys():
+                     scene_data["interactable_features"].append({"id": f_id, "name": f_id.replace("_", " ").capitalize(), "action": action_verb})
+            
+            room_items_list = current_loc_data.get("items", [])
+            scene_data["room_items"] = [
+                {"id": item_id, "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " "))}
+                for item_id in room_items_list ]
+            return jsonify(scene_data)
+        return jsonify({"error": "Server state mismatch or no active game for this character. Please load character again."}), 400
 
     @flask_app_instance.route('/api/save_game_state', methods=['POST'])
     def save_game_state_route():
