@@ -1538,6 +1538,265 @@ def run_minimal_web_server():
                     console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); // Log the data object
                     const outputElement = document.getElementById('game-output');
 
+                    // Define formatGSBCurrency once at a scope accessible by components
+                    function formatGSBCurrency(totalCopper) {
+                        if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
+                        if (totalCopper === 0) return "0🟠";
+
+                        const COPPER_PER_SILVER = 100;
+                        const SILVER_PER_GOLD = 100;
+                        const COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
+
+                        let gold = Math.floor(totalCopper / COPPER_PER_GOLD);
+                        let remainingCopperAfterGold = totalCopper % COPPER_PER_GOLD;
+                        let silver = Math.floor(remainingCopperAfterGold / COPPER_PER_SILVER);
+                        let copper = remainingCopperAfterGold % COPPER_PER_SILVER;
+
+                        let parts = [];
+                        if (gold > 0) parts.push(`${gold}🟡`); 
+                        if (silver > 0) parts.push(`${silver}🔘`);
+                        if (copper > 0 || (gold === 0 && silver === 0)) parts.push(`${copper}🟠`);
+                        return parts.length > 0 ? parts.join(' ') : "0🟠";
+                    }
+
+                    // --- Component: Game Output Area ---
+                    function updateGameOutputComponent(data, actionStringEcho) {
+                        const outputElement = document.getElementById('game-output');
+                        if (!outputElement) return;
+
+                        outputElement.innerHTML = ''; // Clear previous output
+
+                        if (actionStringEcho) {
+                            const p_command_echo = document.createElement('p');
+                            p_command_echo.innerHTML = `<strong>&gt; ${actionStringEcho}</strong>`;
+                            outputElement.appendChild(p_command_echo);
+                        }
+                        if (data.location_name) {
+                            const p_loc_name = document.createElement('p');
+                            p_loc_name.innerHTML = `--- ${data.location_name} (HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'}/${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}) ${data.player_name ? '('+data.player_name+')' : ''}`;
+                            outputElement.appendChild(p_loc_name);
+                        }
+                        if (data.description) { 
+                            const p_desc = document.createElement('p');
+                            p_desc.textContent = data.description;
+                            outputElement.appendChild(p_desc);
+                        }
+                        if (data.message && data.message.trim() !== "") {
+                            const p_message = document.createElement('p'); 
+                            p_message.textContent = data.message; 
+                            outputElement.appendChild(p_message);
+                        }
+                        if (data.map_lines && Array.isArray(data.map_lines)) { 
+                            data.map_lines.forEach(line => {
+                                const p_map_line = document.createElement('p');
+                                p_map_line.style.whiteSpace = "pre"; 
+                                p_map_line.textContent = line;
+                                outputElement.appendChild(p_map_line);
+                            });
+                        }
+                        outputElement.scrollTop = outputElement.scrollHeight; // Auto-scroll
+                    }
+                    // --- End Component: Game Output Area ---
+
+                    // --- Component: Feature Interactions Panel ---
+                    function updateFeatureInteractionsComponent(featuresData) {
+                        const featurePanel = document.getElementById('feature-interactions-panel');
+                        if (!featurePanel) return;
+
+                        // Ensure the panel has a container for buttons, or create one
+                        let featureButtonsContainer = featurePanel.querySelector('.dynamic-buttons-container');
+                        if (!featureButtonsContainer) {
+                            featureButtonsContainer = document.createElement('div');
+                            featureButtonsContainer.classList.add('dynamic-buttons-container'); // Add a class for easier selection
+                            // Find the paragraph and insert the container after it
+                            const pElement = featurePanel.querySelector('p');
+                            if (pElement) {
+                                pElement.insertAdjacentElement('afterend', featureButtonsContainer);
+                            } else {
+                                featurePanel.appendChild(featureButtonsContainer); // Fallback if p is not found
+                            }
+                        }
+                        featureButtonsContainer.innerHTML = ''; // Clear previous feature buttons
+
+                        if (featuresData && featuresData.length > 0) {
+                            featuresData.forEach(feature => {
+                                const featureButton = document.createElement('button');
+                                // Example: "Open Worn Crate" or "Search Loose Rocks"
+                                featureButton.textContent = `${feature.action.charAt(0).toUpperCase() + feature.action.slice(1)} ${feature.name}`;
+                                featureButton.onclick = () => performAction(`${feature.action} ${feature.id}`); // e.g., "open worn_crate"
+                                featureButtonsContainer.appendChild(featureButton);
+                            });
+                            featurePanel.style.display = 'block';
+                        } else {
+                            featurePanel.style.display = 'none';
+                        }
+                    }
+                    // --- End Component: Feature Interactions Panel ---
+
+                    // --- Component: Room Items Panel ---
+                    function updateRoomItemsComponent(itemsData) {
+                        const itemsPanel = document.getElementById('room-items-panel');
+                         if (!itemsPanel) return;
+                        // Ensure the panel has a container for buttons, or create one
+                        let itemsButtonsContainer = itemsPanel.querySelector('.dynamic-buttons-container');
+                        if (!itemsButtonsContainer) {
+                            itemsButtonsContainer = document.createElement('div');
+                            itemsButtonsContainer.classList.add('dynamic-buttons-container'); // Add a class
+                             const pElement = itemsPanel.querySelector('p');
+                            if (pElement) { pElement.insertAdjacentElement('afterend', itemsButtonsContainer); } else { itemsPanel.appendChild(itemsButtonsContainer); }
+                        }
+                        itemsButtonsContainer.innerHTML = ''; // Clear previous item buttons
+
+                        if (itemsData && itemsData.length > 0) {
+                            itemsData.forEach(item => { // item is now {id: "...", name: "..."}
+                                const itemButton = document.createElement('button');
+                                itemButton.textContent = `Take ${item.name}`;
+                                itemButton.onclick = () => performAction(`take ${item.id}`); // Send item_id
+                                itemsButtonsContainer.appendChild(itemButton);
+                            });
+                            itemsPanel.style.display = 'block';
+                        } else {
+                            itemsPanel.style.display = 'none';
+                        }
+                    }
+                    // --- End Component: Room Items Panel ---
+
+                    // --- Component: Dynamic Header ---
+                    function updateDynamicHeaderComponent(headerData) {
+                        const headerInfoDiv = document.getElementById('dynamic-header-info');
+                        if (!headerInfoDiv) return;
+
+                        // Now uses the formatGSBCurrency defined at the higher scope
+                        headerInfoDiv.textContent = `Location: ${headerData.location_name || 'Unknown'} | Player: ${headerData.player_name || 'Adventurer'} - Level: ${headerData.player_level !== undefined ? headerData.player_level : 'N/A'} (XP: ${headerData.player_xp !== undefined ? headerData.player_xp : 'N/A'}/${headerData.player_xp_to_next_level !== undefined ? headerData.player_xp_to_next_level : 'N/A'}) - Coins: ${formatGSBCurrency(headerData.player_coins)} - Diamond: 0💎`;
+                    }
+                    // --- End Component: Dynamic Header ---
+
+                    // --- Component: Character Panel ---
+                    function updateCharacterPanelComponent(playerData) {
+                        const charPanelName = document.getElementById('char-panel-name');
+                        const charPanelClass = document.getElementById('char-panel-class');
+                        const charPanelSpecies = document.getElementById('char-panel-species');
+                        const charPanelLevel = document.getElementById('char-panel-level');
+                        const charPanelXp = document.getElementById('char-panel-xp');
+                        const charPanelHp = document.getElementById('char-panel-hp');
+                        const charPanelAttack = document.getElementById('char-panel-attack');
+                        const charPanelCoins = document.getElementById('char-panel-coins');
+                        const equipGrid = document.getElementById('char-panel-equipment-grid');
+
+                        if (charPanelName) charPanelName.textContent = `Name: ${playerData.player_name || 'N/A'}`;
+                        if (charPanelClass) charPanelClass.textContent = `Class: ${playerData.player_class_name || 'N/A'}`;
+                        if (charPanelSpecies) charPanelSpecies.textContent = `Species: ${playerData.player_species_name || 'N/A'}`;
+                        if (charPanelLevel) charPanelLevel.textContent = `Level: ${playerData.player_level !== undefined ? playerData.player_level : 'N/A'}`;
+                        if (charPanelXp) charPanelXp.textContent = `XP: ${playerData.player_xp !== undefined ? playerData.player_xp : 'N/A'} / ${playerData.player_xp_to_next_level !== undefined ? playerData.player_xp_to_next_level : 'N/A'}`;
+                        if (charPanelHp) charPanelHp.textContent = `HP: ${playerData.player_hp !== undefined ? playerData.player_hp : 'N/A'} / ${playerData.player_max_hp !== undefined ? playerData.player_max_hp : 'N/A'}`;
+                        if (charPanelAttack) charPanelAttack.textContent = `Attack: ${playerData.player_attack_power !== undefined ? playerData.player_attack_power : 'N/A'}`;
+                        if (charPanelCoins) charPanelCoins.textContent = `Coins: ${formatGSBCurrency(playerData.player_coins)}`;
+
+                        const equipSlots = {
+                            head: document.getElementById('char-panel-equip-head'),
+                            shoulders: document.getElementById('char-panel-equip-shoulders'),
+                            chest: document.getElementById('char-panel-equip-chest'),
+                            hands: document.getElementById('char-panel-equip-hands'),
+                            legs: document.getElementById('char-panel-equip-legs'),
+                            feet: document.getElementById('char-panel-equip-feet'),
+                            main_hand: document.getElementById('char-panel-equip-main_hand'),
+                            off_hand: document.getElementById('char-panel-equip-off_hand')
+                        };
+                        const equipSlotPrefixes = {
+                            head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", main_hand: "MH", off_hand: "OH"
+                        };
+
+                        for (const slotKey in equipSlots) {
+                            if (equipSlots[slotKey]) {
+                                const itemName = playerData.player_equipment && playerData.player_equipment[slotKey] ? playerData.player_equipment[slotKey] : 'Empty';
+                                const prefix = equipSlotPrefixes[slotKey] || slotKey.substring(0,1).toUpperCase();
+                                equipSlots[slotKey].textContent = `${prefix}: ${itemName}`;
+
+                                if (playerData.player_equipment && playerData.player_equipment[`${slotKey}_id`]) {
+                                     equipSlots[slotKey].setAttribute('data-item-id', playerData.player_equipment[`${slotKey}_id`]);
+                                     equipSlots[slotKey].style.borderColor = '#007bff'; 
+                                } else {
+                                     equipSlots[slotKey].removeAttribute('data-item-id');
+                                     equipSlots[slotKey].style.borderColor = '#b0b0b0'; 
+                                }
+                            }
+                        }
+                        // Re-attach double-click listeners to equipped slots within this component
+                        if (equipGrid) {
+                            equipGrid.querySelectorAll('.equip-slot[data-item-id]').forEach(slotElement => {
+                                // Remove old listener to prevent duplicates if any, then add new one
+                                slotElement.removeEventListener('dblclick', handleUnequipDoubleClick); // Ensure handleUnequipDoubleClick is accessible
+                                slotElement.addEventListener('dblclick', handleUnequipDoubleClick);
+                            });
+                        }
+                    }
+                    // --- End Component: Character Panel ---
+
+                    // --- Component: Game Actions Panel ---
+                    function updateGameActionsComponent(data) {
+                        const gameActionsPanel = document.getElementById('game-actions-panel');
+                        if (!gameActionsPanel) return;
+
+                        // Ensure a container for buttons exists, or create one
+                        let buttonsContainer = gameActionsPanel.querySelector('.dynamic-buttons-container');
+                        if (!buttonsContainer) {
+                            buttonsContainer = document.createElement('div');
+                            buttonsContainer.classList.add('dynamic-buttons-container');
+                            const pElement = gameActionsPanel.querySelector('p'); // Assuming a <p><strong>Game Actions:</strong></p> exists
+                            if (pElement) { pElement.insertAdjacentElement('afterend', buttonsContainer); } else { gameActionsPanel.appendChild(buttonsContainer); }
+                        }
+                        buttonsContainer.innerHTML = ''; // Clear previous buttons
+
+                        if (data.can_save_in_city) {
+                            const saveButton = document.createElement('button');
+                            saveButton.textContent = 'Save Game';
+                            saveButton.onclick = async () => { // Make sure this async logic is appropriate here or refactored
+                                const response = await fetch('/api/save_game_state', { method: 'POST' });
+                                const result = await response.json();
+                                appendMessageToOutput(result.message); // appendMessageToOutput needs to be accessible
+                            };
+                            buttonsContainer.appendChild(saveButton);
+                            gameActionsPanel.style.display = 'block';
+                        } else {
+                            gameActionsPanel.style.display = 'none';
+                        }
+                    }
+                    // --- End Component: Game Actions Panel ---
+
+                    // --- Component: Inventory Modal ---
+                    function updateInventoryModalComponent(data, actionStringEcho) {
+                        if (actionStringEcho === 'inventory') {
+                            let sortButtonHTML = `<div style="margin-bottom: 10px;"><button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button></div>`;
+                            let inventoryGridHTML = '<div id="modal-backpack-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">';
+
+                            if (data.inventory_list && data.inventory_list.length > 0) {
+                                inventoryGridHTML += '</div>'; // Close the grid div
+                            } else {
+                                inventoryGridHTML = "<p>Your inventory is empty.</p>"; // If empty, replace grid with message
+                            }
+                            
+                            let modalDisplayContent = sortButtonHTML + inventoryGridHTML;
+                            showMenuModal("Backpack", modalDisplayContent, [{text: "Close", action: () => {}}]);
+                            
+                            // Populate the grid if inventory_list is available and not empty
+                            if (data.inventory_list && data.inventory_list.length > 0) {
+                                renderOrUpdateModalBackpackGrid(data.inventory_list);
+                            }
+                            // Clear any default message like "Your inventory is empty" from main output if modal is shown
+                            if (document.getElementById('game-output') && data.message === "Your inventory is empty.") {
+                                data.message = ""; // This might need careful handling if message is also used by game output component
+                            }
+
+                        } else if (actionStringEcho === 'sort_inventory_by_id_action' && data.inventory_list) {
+                            const modalGrid = document.getElementById('modal-backpack-grid');
+                            // Check if the modal is actually visible (custom-modal-overlay exists)
+                            if (modalGrid && document.getElementById('custom-modal-overlay')) {
+                                renderOrUpdateModalBackpackGrid(data.inventory_list);
+                            }
+                        }
+                    }
+                    // --- End Component: Inventory Modal ---
+
                     // Helper function to render or update the backpack grid within the modal
                     function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
                         const modalGridContainer = document.getElementById('modal-backpack-grid');
@@ -1571,166 +1830,31 @@ def run_minimal_web_server():
                         });
                     }
 
-                    // --- Inventory Modal Handling ---
-                    if (actionStringEcho === 'inventory') {
-                        let sortButtonHTML = `<div style="margin-bottom: 10px;"><button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button></div>`;
-                        
-                        // Create an empty container for the grid initially. It will be populated by renderOrUpdateModalBackpackGrid.
-                        let inventoryGridHTML = '<div id="modal-backpack-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">';
-                        if (data.inventory_list && data.inventory_list.length > 0) {
-                            inventoryGridHTML += '</div>';
-                        } else {
-                            inventoryGridHTML = "<p>Your inventory is empty.</p>"; // Keep this if no items
-                        }
-                        // Combine sort button and grid for the modal message
-                        let modalDisplayContent = sortButtonHTML + inventoryGridHTML;
-                        showMenuModal("Backpack", modalDisplayContent, [{text: "Close", action: () => {}}]);
-                        data.message = ""; // Clear any default message like "Your inventory is empty" from main output
-
-                        // Populate the grid if inventory_list is available
-                        if (data.inventory_list && data.inventory_list.length > 0) {
-                            renderOrUpdateModalBackpackGrid(data.inventory_list);
-                        }
+                    // Define the unequip double-click handler function within displaySceneData scope
+                    // This needs to be accessible by updateCharacterPanelComponent
+                    function handleUnequipDoubleClick(event) {
+                        event.preventDefault(); 
+                        const itemId = this.getAttribute('data-item-id');
+                        // const slotKey = this.getAttribute('data-slot-key'); // slotKey is on the element itself
+                        console.log(`Double-clicked equipped item ID: ${itemId}`);
+                        if (itemId) performAction(`unequip ${itemId}`);
                     }
-                    // --- End Inventory Modal Handling ---
 
-                    if (actionStringEcho) { // Optionally echo the command that led to this scene
-                        const p_command_echo = document.createElement('p');
-                        p_command_echo.innerHTML = `<strong>&gt; ${actionStringEcho}</strong>`;
-                            outputElement.appendChild(p_command_echo);
-                    }
-                        if(data.location_name) {
-                            const p_loc_name = document.createElement('p');
-                            p_loc_name.innerHTML = `--- ${data.location_name} (HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'}/${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}) ${data.player_name ? '('+data.player_name+')' : ''}`;
-                            outputElement.appendChild(p_loc_name);
-                        }
-                        if(data.description) { 
-                            const p_desc = document.createElement('p');
-                            p_desc.textContent = data.description;
-                            outputElement.appendChild(p_desc);
-                        }
-                        const p_message = document.createElement('p'); 
-                        if(data.message && data.message.trim() !== "") p_message.textContent = data.message; 
-                        outputElement.appendChild(p_message);
-                        
-                        // --- Dynamic Update for Sort Action ---
-                        if (actionStringEcho === 'sort_inventory_by_id_action' && data.inventory_list) {
-                            const modalGrid = document.getElementById('modal-backpack-grid');
-                            // Check if the modal is actually visible (custom-modal-overlay exists)
-                            if (modalGrid && document.getElementById('custom-modal-overlay')) {
-                                renderOrUpdateModalBackpackGrid(data.inventory_list);
-                            }
-                        }
-                        // --- End Dynamic Update for Sort Action ---
+                        updateInventoryModalComponent(data, actionStringEcho);
+                        updateGameOutputComponent(data, actionStringEcho);
 
-                        function formatGSBCurrency(totalCopper) {
-                            if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
-                            if (totalCopper === 0) return "0🟠";
+                        // Call the component function to update the Dynamic Header
+                        updateDynamicHeaderComponent(data); // Pass the whole data object, component will pick what it needs
 
-                            const COPPER_PER_SILVER = 100;
-                            const SILVER_PER_GOLD = 100;
-                            const COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
+                        // Call the component function to update the Character Panel
+                        updateCharacterPanelComponent(data); 
 
-                            let gold = Math.floor(totalCopper / COPPER_PER_GOLD);
-                            let remainingCopperAfterGold = totalCopper % COPPER_PER_GOLD;
+                        // Call the component functions to update Feature and Item panels
+                        updateFeatureInteractionsComponent(data.interactable_features);
+                        updateRoomItemsComponent(data.room_items);
 
-                            let silver = Math.floor(remainingCopperAfterGold / COPPER_PER_SILVER);
-                            let copper = remainingCopperAfterGold % COPPER_PER_SILVER;
-
-                            let parts = [];
-                            if (gold > 0) parts.push(`${gold}🟡`); 
-                            if (silver > 0) parts.push(`${silver}🔘`); // Gray circle for Silver
-                            
-                            // Always show copper if it's non-zero, or if gold and silver are both zero (to ensure "0c" or "Xc")
-                            if (copper > 0 || (gold === 0 && silver === 0)) {
-                                parts.push(`${copper}🟠`); // Orange circle for Copper
-                            }
-                            return parts.length > 0 ? parts.join(' ') : "0🟠"; // Fallback to "0" with copper circle
-                        }
-
-                        // Update dynamic header
-                        const headerInfoDiv = document.getElementById('dynamic-header-info');
-                        if (headerInfoDiv) {
-                            // Ensure header is visible only when game interface is active
-                            headerInfoDiv.style.display = document.getElementById('game-interface').style.display === 'block' ? 'block' : 'none';
-                            headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Player: ${data.player_name || 'Adventurer'} - Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} (XP: ${data.player_xp !== undefined ? data.player_xp : 'N/A'}/${data.player_xp_to_next_level !== undefined ? data.player_xp_to_next_level : 'N/A'}) - Coins: ${formatGSBCurrency(data.player_coins)} - Diamond: 0💎`;
-                        }
-
-                        // Populate Character Panel
-                        const charPanelName = document.getElementById('char-panel-name');
-                        const charPanelClass = document.getElementById('char-panel-class');
-                        const charPanelSpecies = document.getElementById('char-panel-species');
-                        const charPanelLevel = document.getElementById('char-panel-level');
-                        const charPanelXp = document.getElementById('char-panel-xp');
-                        const charPanelHp = document.getElementById('char-panel-hp');
-                        const charPanelAttack = document.getElementById('char-panel-attack');
-                        const charPanelCoins = document.getElementById('char-panel-coins');
-                        // Equipment Slots
-                        const equipGrid = document.getElementById('char-panel-equipment-grid');
-                        const equipSlots = {
-                            head: document.getElementById('char-panel-equip-head'),
-                            shoulders: document.getElementById('char-panel-equip-shoulders'),
-                            chest: document.getElementById('char-panel-equip-chest'),
-                            hands: document.getElementById('char-panel-equip-hands'),
-                            legs: document.getElementById('char-panel-equip-legs'),
-                            feet: document.getElementById('char-panel-equip-feet'),
-                            main_hand: document.getElementById('char-panel-equip-main_hand'),
-                            off_hand: document.getElementById('char-panel-equip-off_hand')
-                        };
-                        const equipSlotPrefixes = {
-                            head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", main_hand: "MH", off_hand: "OH"
-                        };
-
-                        if (charPanelName) charPanelName.textContent = `Name: ${data.player_name || 'N/A'}`;
-                        if (charPanelClass) charPanelClass.textContent = `Class: ${data.player_class_name || 'N/A'}`;
-                        if (charPanelSpecies) charPanelSpecies.textContent = `Species: ${data.player_species_name || 'N/A'}`;
-                        if (charPanelLevel) charPanelLevel.textContent = `Level: ${data.player_level !== undefined ? data.player_level : 'N/A'}`;
-                        if (charPanelXp) charPanelXp.textContent = `XP: ${data.player_xp !== undefined ? data.player_xp : 'N/A'} / ${data.player_xp_to_next_level !== undefined ? data.player_xp_to_next_level : 'N/A'}`;
-                        if (charPanelHp) charPanelHp.textContent = `HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'} / ${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}`;
-                        if (charPanelAttack) charPanelAttack.textContent = `Attack: ${data.player_attack_power !== undefined ? data.player_attack_power : 'N/A'}`;
-                        if (charPanelCoins) charPanelCoins.textContent = `Coins: ${formatGSBCurrency(data.player_coins)}`;
-                        for (const slotKey in equipSlots) {
-                            if (equipSlots[slotKey]) {
-                                const itemName = data.player_equipment && data.player_equipment[slotKey] ? data.player_equipment[slotKey] : 'Empty';
-                                const prefix = equipSlotPrefixes[slotKey] || slotKey.substring(0,1).toUpperCase();
-                                equipSlots[slotKey].textContent = `${prefix}: ${itemName}`;
-
-                                // Store the item ID on the slot element if an item is equipped
-                                if (data.player_equipment && data.player_equipment[`${slotKey}_id`]) { // Assuming backend sends item_id as slotKey_id
-                                     equipSlots[slotKey].setAttribute('data-item-id', data.player_equipment[`${slotKey}_id`]);
-                                     equipSlots[slotKey].style.borderColor = '#007bff'; // Example: Highlight equipped slots
-                                } else {
-                                     equipSlots[slotKey].removeAttribute('data-item-id');
-                                     equipSlots[slotKey].style.borderColor = '#b0b0b0'; // Default border
-                                }
-
-                            }
-                        }
-                        // Add double-click listeners to equipped slots
-                        // Define the unequip double-click handler function within displaySceneData scope
-                        function handleUnequipDoubleClick(event) {
-                            event.preventDefault(); // Prevent default text selection on double-click
-                            const itemId = this.getAttribute('data-item-id');
-                            const slotKey = this.getAttribute('data-slot-key'); // Get the slot key
-                            console.log(`Double-clicked equipped item ID: ${itemId} in slot: ${slotKey}`);
-                            if (itemId) { // Only attempt to unequip if there's an item ID
-                                performAction(`unequip ${itemId}`); // Send the unequip command
-                            }
-                        }
-                        if (equipGrid) { // equipGrid is document.getElementById('char-panel-equipment-grid')
-                            equipGrid.querySelectorAll('.equip-slot[data-item-id]').forEach(slotElement => {
-                                slotElement.addEventListener('dblclick', handleUnequipDoubleClick);
-                            });
-                        }
-
-                        if(data.map_lines && Array.isArray(data.map_lines)) { 
-                            data.map_lines.forEach(line => {
-                                const p_map_line = document.createElement('p');
-                                p_map_line.style.whiteSpace = "pre"; 
-                                p_map_line.textContent = line;
-                                outputElement.appendChild(p_map_line);
-                            });
-                        }
+                        // Call the component function to update the Game Actions Panel
+                        updateGameActionsComponent(data);
                         // The block that previously printed inventory to the main output is removed
                         // as it's now handled by the modal.
                         // if(data.inventory_list && Array.isArray(data.inventory_list)) {
@@ -1745,70 +1869,9 @@ def run_minimal_web_server():
                         //         });
                         //     }
                         //}
-
-                        // Handle interactable features
-                        const featurePanel = document.getElementById('feature-interactions-panel');
-                        const featureButtonsContainer = featurePanel.querySelector('p').nextElementSibling || document.createElement('div'); // Get/create div for buttons
-                        if (!featurePanel.querySelector('div')) featurePanel.appendChild(featureButtonsContainer); // Append if new
-                        featureButtonsContainer.innerHTML = ''; // Clear previous feature buttons
-
-                        if (data.interactable_features && data.interactable_features.length > 0) {
-                            data.interactable_features.forEach(feature => {
-                                const featureButton = document.createElement('button');
-                                // Example: "Open Worn Crate" or "Search Loose Rocks"
-                                featureButton.textContent = `${feature.action.charAt(0).toUpperCase() + feature.action.slice(1)} ${feature.name}`;
-                                featureButton.onclick = () => performAction(`${feature.action} ${feature.id}`); // e.g., "open worn_crate"
-                                featureButtonsContainer.appendChild(featureButton);
-                            });
-                            featurePanel.style.display = 'block';
-                        } else {
-                            featurePanel.style.display = 'none';
-                        }
-
-                        // Handle items on the ground
-                        const itemsPanel = document.getElementById('room-items-panel');
-                        // Ensure the panel and its inner div for buttons exist
-                        const itemsContainer = itemsPanel.querySelector('div'); // Assumes HTML: <div id="room-items-panel"><p>...</p><div></div></div>
-                        if (itemsContainer) {
-                            itemsContainer.innerHTML = ''; // Clear previous item buttons
-
-                            if (data.room_items && data.room_items.length > 0) {
-                                data.room_items.forEach(item => { // item is now {id: "...", name: "..."}
-                                    const itemButton = document.createElement('button');
-                                    itemButton.textContent = `Take ${item.name}`;
-                                    itemButton.onclick = () => performAction(`take ${item.id}`); // Send item_id
-                                    itemsContainer.appendChild(itemButton);
-                                });
-                                itemsPanel.style.display = 'block';
-                            } else {
-                                itemsPanel.style.display = 'none';
-                            }
-                        }
+                        // outputElement.scrollTop = outputElement.scrollHeight; // Moved to updateGameOutputComponent
                 }
                 
-                function setupGameActions(data) {
-                    const gameActionsPanel = document.getElementById('game-actions-panel');
-                    if (!gameActionsPanel) return;
-
-                    const buttonsContainer = gameActionsPanel.querySelector('div') || document.createElement('div');
-                    if (!gameActionsPanel.contains(buttonsContainer)) gameActionsPanel.appendChild(buttonsContainer);
-                    buttonsContainer.innerHTML = ''; // Clear previous buttons
-
-                    if (data.can_save_in_city) {
-                        const saveButton = document.createElement('button');
-                        saveButton.textContent = 'Save Game';
-                        saveButton.onclick = async () => {
-                            const response = await fetch('/api/save_game_state', { method: 'POST' });
-                            const result = await response.json();
-                            appendMessageToOutput(result.message); // Helper to add message to game output
-                        };
-                        buttonsContainer.appendChild(saveButton);
-                        gameActionsPanel.style.display = 'block';
-                    } else {
-                        gameActionsPanel.style.display = 'none';
-                    }
-                }
-
                 // Initial load
                 window.onload = () => {
                     // showInitialCharacterScreen(); // REMOVE THIS UNCONDITIONAL CALL
