@@ -18,6 +18,7 @@ except ImportError:
     flask_available = False
 
 import game_logic # Import our new game logic module
+from entities import Player # Import the Player class
 HOSTILE_MOB_VISUAL = """
   .--""--.
  /        \\
@@ -53,42 +54,8 @@ items_data = {}
 species_data = {}
 classes_data = {}
 
-player = {
-    "current_location_id": None,
-    "inventory": [],
-    "game_active": False,
-    "hp": 0, 
-    "max_hp": 0, 
-    "attack_power": 0, 
-    "special_power": 0,
-    "name": "Adventurer", # Default name
-    "gender": "Unspecified", # Default gender
-    "species": None,
-    "class": None,
-    "special_moves": {},
-    "special_cooldowns": {},
-    "combat_target_id": None,
-    "is_deflecting": False,
-    "dialogue_npc_id": None,
-    "dialogue_options_pending": {},
-    "flags": {},
-    "coins": 0, # Player's currency
-    "level": 1, # Player's level
-    "xp": 0, # Player's experience points
-    "xp_to_next_level": 100, # XP needed for the next level
-    "equipment": { # New dictionary for equipped items
-        "head": None,
-        "shoulders": None,
-        "chest": None, # Was armor_body
-        "hands": None,
-        "legs": None,
-        "feet": None,
-        "main_hand": None, # Was weapon
-        "off_hand": None
-
-    },
-    "is_paused": False # New flag for game pause state
-}
+# Initialize player as an instance of the Player class
+player = Player()
 
 PLAYER_LOGS_DIR = "player_data"
 MAX_NAME_LENGTH = 20
@@ -275,7 +242,7 @@ def sanitize_filename(name):
 
 def save_player_data(player_to_save, reason_for_save="Game state saved"):
     """Saves current player data to their character_creation.json file."""
-    if not player_to_save.get("name"):
+    if not player_to_save.name: # Access attribute directly
         print("[ERROR] Cannot save game: Player name not set.") # Changed to ERROR for consistency
         return False # Indicate failure
 
@@ -286,25 +253,26 @@ def save_player_data(player_to_save, reason_for_save="Game state saved"):
             print(f"[ERROR] Could not create player logs directory: {e}")
             return False # Indicate failure
 
-    player_name_sanitized = sanitize_filename(player_to_save.get("name"))
+    player_name_sanitized = sanitize_filename(player_to_save.name)
     player_specific_dir = os.path.join(PLAYER_LOGS_DIR, player_name_sanitized)
 
     if not os.path.exists(player_specific_dir):
         try:
             os.makedirs(player_specific_dir)
         except OSError as e:
-            print(f"[ERROR] Could not create directory for player '{player_to_save.get('name')}': {e}")
+            print(f"[ERROR] Could not create directory for player '{player_to_save.name}': {e}")
             return False
 
     # Always save to the canonical save file name that load_character_data uses.
     save_file_path = os.path.join(player_specific_dir, "character_creation.json")
     try:
         with open(save_file_path, 'w') as f:
-            json.dump(player_to_save, f, indent=4)
-        print(f"[Save] {reason_for_save}. Player data for '{player_to_save.get('name')}' saved to {save_file_path}")
+            # Convert Player object to a dictionary for JSON serialization
+            json.dump(player_to_save.__dict__, f, indent=4)
+        print(f"[Save] {reason_for_save}. Player data for '{player_to_save.name}' saved to {save_file_path}")
         return True # Indicate success
     except Exception as e:
-        print(f"[ERROR] Failed to save player data for '{player_to_save.get('name')}': {e}")
+        print(f"[ERROR] Failed to save player data for '{player_to_save.name}': {e}")
         return False
 
 def delete_character_data(character_display_name):
@@ -334,10 +302,13 @@ def load_character_data(character_display_name):
     if os.path.exists(log_file_path):
         try:
             with open(log_file_path, 'r') as f:
-                loaded_data = json.load(f)
-            player = loaded_data # Replace global player dict
-            player["game_active"] = True # Ensure game is marked active
-            print(f"\nCharacter '{player.get('name')}' loaded successfully.")
+                player_data_dict = json.load(f)
+            # Re-initialize player object with loaded data
+            player = Player(name=player_data_dict.get("name", "Adventurer"), gender=player_data_dict.get("gender", "Unspecified"))
+            for key, value in player_data_dict.items():
+                setattr(player, key, value) # Set all attributes from the loaded dict
+            player.game_active = True # Ensure game is marked active
+            print(f"\nCharacter '{player.name}' loaded successfully.")
             return True
         except Exception as e:
             print(f"Error loading character data for '{character_display_name}': {e}")
@@ -347,10 +318,10 @@ def load_character_data(character_display_name):
 
 def log_game_event(event_type, data_dict):
     """Logs a specific game event to a character's event log file."""
-    if not player.get("name") or not player.get("game_active"): # Don't log if no active character or game
+    if not player.name or not player.game_active: # Don't log if no active character or game
         return
 
-    player_name_sanitized = sanitize_filename(player.get("name", "unknown_player_event_log"))
+    player_name_sanitized = sanitize_filename(player.name if player.name else "unknown_player_event_log")
     player_specific_dir = os.path.join(PLAYER_LOGS_DIR, player_name_sanitized)
 
     if not os.path.exists(player_specific_dir):
@@ -382,23 +353,23 @@ def initialize_game_state():
     species_id, class_id, char_name, char_gender = _get_terminal_character_choices()
 
     if not game_logic.apply_character_choices_and_stats(player, species_id, class_id, char_name, char_gender, species_data, classes_data, save_player_data):
-        player["game_active"] = False
+        player.game_active = False
         print("Character creation cancelled. Game not started.")
         # No return here, _apply_character_choices_and_stats returns bool but doesn't stop execution
         return
 
-    player["game_active"] = True
-    player["combat_target_id"] = None
-    player["dialogue_npc_id"] = None
-    player["dialogue_options_pending"] = {}
-    player["flags"]["found_starter_items"] = False 
+    # player.game_active is set within apply_character_choices_and_stats
+    player.combat_target_id = None
+    player.dialogue_npc_id = None
+    player.dialogue_options_pending = {}
+    player.flags["found_starter_items"] = False
     
-    species_info = species_data[player["species"]]
+    species_info = species_data[player.species_id]
     print(f"\n{species_info['backstory_intro']}")
 
     start_room_id = "generic_start_room" 
-    player["current_location_id"] = start_room_id
-    class_info = classes_data[player["class"]]
+    player.current_location_id = start_room_id
+    class_info = classes_data[player.class_id]
     if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
         locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info["starter_items"])
         locations[start_room_id]["features"]["worn_crate"]["closed"] = True 
@@ -406,8 +377,8 @@ def initialize_game_state():
     print(f"You feel a pull towards the {locations[start_room_id]['name']}.")
 
 def start_combat(npc_id):
-    player["combat_target_id"] = npc_id
-    current_loc_npcs = locations[player["current_location_id"]].get("npcs", {})
+    player.combat_target_id = npc_id
+    current_loc_npcs = locations[player.current_location_id].get("npcs", {})
     if npc_id not in current_loc_npcs or not current_loc_npcs[npc_id].get("hp"):
         return
     npc_data = current_loc_npcs[npc_id]
@@ -417,38 +388,38 @@ def start_combat(npc_id):
 def handle_player_defeat():
     print("\nYour vision fades... You have been defeated.")
     print("--- GAME OVER ---")
-    player["game_active"] = False
-    player["dialogue_npc_id"] = None
-    player["dialogue_options_pending"] = {}
-    player["combat_target_id"] = None
+    player.game_active = False
+    player.dialogue_npc_id = None
+    player.dialogue_options_pending = {}
+    player.combat_target_id = None
 
 def award_xp(amount):
     """Awards XP to the player and checks for level up."""
-    if not player["game_active"]:
+    if not player.game_active:
         return
 
-    player["xp"] += amount
+    player.xp += amount
     print(f"You gained {amount} XP.")
-    log_game_event("xp_gained", {"amount": amount, "current_xp": player["xp"], "level": player["level"]})
+    log_game_event("xp_gained", {"amount": amount, "current_xp": player.xp, "level": player.level})
 
-    while player["xp"] >= player["xp_to_next_level"]:
-        player["level"] += 1
-        player["xp"] -= player["xp_to_next_level"] # Subtract XP used for this level
+    while player.xp >= player.xp_to_next_level:
+        player.level += 1
+        player.xp -= player.xp_to_next_level # Subtract XP used for this level
         # Increase XP needed for the *next* level (e.g., 50% more than previous)
-        player["xp_to_next_level"] = int(player["xp_to_next_level"] * 1.5) 
+        player.xp_to_next_level = int(player.xp_to_next_level * 1.5)
         
         # Apply level-up bonuses (example)
-        player["max_hp"] += 10
-        player["hp"] = player["max_hp"] # Full heal on level up
-        player["attack_power"] += 2
+        player.max_hp += 10
+        player.hp = player.max_hp # Full heal on level up
+        player.attack_power += 2
 
-        print(f"\n*** LEVEL UP! You are now Level {player['level']}! ***")
-        print(f"Max HP increased to {player['max_hp']}. Attack Power increased to {player['attack_power']}.")
-        print(f"XP to next level: {player['xp_to_next_level']}. Current XP: {player['xp']}.")
-        log_game_event("level_up", {"new_level": player["level"], "max_hp": player["max_hp"], "attack_power": player["attack_power"]})
+        print(f"\n*** LEVEL UP! You are now Level {player.level}! ***")
+        print(f"Max HP increased to {player.max_hp}. Attack Power increased to {player.attack_power}.")
+        print(f"XP to next level: {player.xp_to_next_level}. Current XP: {player.xp}.")
+        log_game_event("level_up", {"new_level": player.level, "max_hp": player.max_hp, "attack_power": player.attack_power})
 
 def handle_npc_defeat(npc_id):
-    current_loc_data = locations[player["current_location_id"]]
+    current_loc_data = locations[player.current_location_id]
     npc_data = current_loc_data["npcs"][npc_id]
     print(f"\n{npc_data['name']} has been defeated!")
     
@@ -462,7 +433,7 @@ def handle_npc_defeat(npc_id):
             dropped_items_details.append(item_detail)
         log_game_event("npc_loot_dropped", {
             "npc_id": npc_id, "npc_name": npc_data.get("name"), "dropped_items": dropped_items_details,
-            "location_id": player.get("current_location_id")
+            "location_id": player.current_location_id
         })
         for item_id in npc_data["loot"]:
             current_loc_data.setdefault("items", []).append(item_id)
@@ -473,16 +444,16 @@ def handle_npc_defeat(npc_id):
     award_xp(xp_reward)
 
     del current_loc_data["npcs"][npc_id]
-    player["combat_target_id"] = None 
-    player["dialogue_npc_id"] = None 
-    player["dialogue_options_pending"] = {}
+    player.combat_target_id = None
+    player.dialogue_npc_id = None
+    player.dialogue_options_pending = {}
 
 def npc_combat_turn():
-    if not player["combat_target_id"] or not player["game_active"]:
+    if not player.combat_target_id or not player.game_active:
         return
 
-    npc_id = player["combat_target_id"]
-    current_loc_data = locations[player["current_location_id"]]
+    npc_id = player.combat_target_id
+    current_loc_data = locations[player.current_location_id]
     
     if npc_id not in current_loc_data["npcs"]:
         return 
@@ -495,25 +466,25 @@ def npc_combat_turn():
     print(f"\n{npc_data['name']}'s turn...")
     damage_to_player = npc_data["attack_power"]
     
-    if player["is_deflecting"]:
+    if player.is_deflecting:
         damage_to_player = max(0, damage_to_player // 2) 
         print(f"You deflect part of the blow!")
-        player["is_deflecting"] = False 
+        player.is_deflecting = False
 
-    player["hp"] -= damage_to_player
+    player.take_damage(damage_to_player) # Use method
     print(f"{npc_data['name']} attacks you for {damage_to_player} damage.")
-    print(f"You have {player['hp']}/{player['max_hp']} HP remaining.")
+    print(f"You have {player.hp}/{player.max_hp} HP remaining.")
 
-    if player["hp"] <= 0:
+    if player.hp <= 0:
         handle_player_defeat()
     
-    for move in player["special_cooldowns"]:
-        if player["special_cooldowns"][move] > 0:
-            player["special_cooldowns"][move] -= 1
+    for move in player.special_cooldowns:
+        if player.special_cooldowns[move] > 0:
+            player.special_cooldowns[move] -= 1
 
 @trace_function_calls
 def handle_environmental_interaction(feature_id, action_verb):
-    loc_data = locations[player["current_location_id"]]
+    loc_data = locations[player.current_location_id]
     feature = loc_data.get("features", {}).get(feature_id)
 
     if not feature:
@@ -564,14 +535,14 @@ def handle_environmental_interaction(feature_id, action_verb):
                     revealed_items_details_for_log.append(item_data_for_log)
                 log_game_event("crate_contents_revealed", {
                     "feature_id": feature_id, "revealed_items": revealed_items_details_for_log,
-                    "location_id": player["current_location_id"]
+                    "location_id": player.current_location_id
                 })
             feature["contains_on_open"] = [] # Empty the crate's internal list
             feature["closed"] = False
-            player["flags"]["found_starter_items"] = True # Still set this flag
+            player.flags["found_starter_items"] = True # Still set this flag
     elif chosen_outcome.get("type") == "stat_change" and chosen_outcome.get("stat") == "hp":
-        player["hp"] = min(player["max_hp"], player["hp"] + chosen_outcome.get("amount", 0))
-        print(f"Your HP is now {player['hp']}/{player['max_hp']}.")
+        player.heal(chosen_outcome.get("amount", 0)) # Use method
+        print(f"Your HP is now {player.hp}/{player.max_hp}.")
 
 def run_minimal_web_server():
     global flask_app_instance
@@ -599,30 +570,30 @@ def run_minimal_web_server():
         action = data.get('action')
 
         # Ensure player object and essential keys exist, especially current_location_id
-        if not player or "current_location_id" not in player or player["current_location_id"] is None:
+        if not player or player.current_location_id is None:
             # This might happen if character creation/load didn't complete properly for the web session
             # Or if an action is attempted before the game is truly active for the web.
-            player["current_location_id"] = "generic_start_room" # Default to a safe starting point
-            player.setdefault("name", "Unknown Adventurer")
-            player.setdefault("hp", 0)
-            player.setdefault("max_hp", 0)
-            player.setdefault("inventory", [])
-            player.setdefault("game_active", False) # Mark as not fully active if we had to reset
+            player.current_location_id = "generic_start_room" # Default to a safe starting point
+            if not player.name: player.name = "Unknown Adventurer" # Ensure defaults if object was just created
+            if not hasattr(player, 'hp'): player.hp = 0
+            if not hasattr(player, 'max_hp'): player.max_hp = 0
+            if not hasattr(player, 'inventory'): player.inventory = []
+            player.game_active = False # Mark as not fully active if we had to reset
 
         game_response = {
             "message": "",
-            "player_hp": player.get("hp"),
-            "player_name": player.get("name"),
-            "player_max_hp": player.get("max_hp"),
+            "player_hp": player.hp,
+            "player_name": player.name,
+            "player_max_hp": player.max_hp,
             "location_name": "Unknown Area", # Default
             "description": "An unfamiliar place.", # Default
-            "player_coins": player.get("coins", 0),
-            "player_level": player.get("level", 1),
-            "player_xp": player.get("xp", 0),
-            "player_xp_to_next_level": player.get("xp_to_next_level", 100),
-            "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
-            "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
-            "player_attack_power": player.get("attack_power", 0),
+            "player_coins": player.coins,
+            "player_level": player.level,
+            "player_xp": player.xp,
+            "player_xp_to_next_level": player.xp_to_next_level,
+            "player_class_name": classes_data.get(player.class_id, {}).get("name", "N/A"),
+            "player_species_name": species_data.get(player.species_id, {}).get("name", "N/A"),
+            "player_attack_power": player.attack_power,
             "player_equipment": { # Initialize with all expected slots
                 "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
                 "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
@@ -632,12 +603,12 @@ def run_minimal_web_server():
             "can_save_in_city": False # Default save status
         }
 
-        if not player.get("game_active") and action not in ['!start']: # Check game_active safely
+        if not player.game_active and action not in ['!start']: # Check game_active safely
              game_response["message"] = "Game not started. Please start the game first (this might require a terminal interaction if using --browser at launch without --autostart)."
              return jsonify(game_response)
 
         if action == 'look':
-            loc_id = player["current_location_id"]
+            loc_id = player.current_location_id
             if loc_id in locations:
                 # location_name and description already set by default above
                 game_response["location_name"] = locations[loc_id].get("name", "Unknown Area")
@@ -647,12 +618,12 @@ def run_minimal_web_server():
                 game_response["message"] = "Current location is unknown."
         elif action.startswith('go '):
             direction = action.split(' ', 1)[1] 
-            current_loc_id = player["current_location_id"]
+            current_loc_id = player.current_location_id
             current_location_data = locations.get(current_loc_id, {})
             
             if direction in current_location_data.get("exits", {}):
-                player["current_location_id"] = current_location_data["exits"][direction]
-                new_loc_id = player["current_location_id"]
+                player.current_location_id = current_location_data["exits"][direction]
+                new_loc_id = player.current_location_id
                 new_location_data = locations.get(new_loc_id, {})
                 game_response["message"] = f"You walk {direction}."
                 game_response["location_name"] = new_location_data.get("name", "Unknown Area")
@@ -663,7 +634,7 @@ def run_minimal_web_server():
                 game_response["description"] = current_location_data.get("description", "An unfamiliar place.")
         elif action == 'inventory':
             # Ensure inventory key exists
-            player_inventory = player.get("inventory", [])
+            player_inventory = player.inventory
             if player_inventory:
                 # Send detailed inventory: list of objects {id, name, type, equip_slot}
                 game_response["inventory_list"] = [
@@ -679,7 +650,7 @@ def run_minimal_web_server():
             else:
                 game_response["message"] = "Your inventory is empty."
         elif action == '!map':
-            loc_id = player.get("current_location_id")
+            loc_id = player.current_location_id
             if loc_id and loc_id in locations:
                 map_data_lines = draw_zone_map(loc_id) 
                 game_response["map_lines"] = map_data_lines 
@@ -692,14 +663,14 @@ def run_minimal_web_server():
                 game_response["description"] = "You are lost and cannot see a map."
         elif action.startswith('take '):
             item_id_to_take = action.split(' ', 1)[1]
-            current_loc_id = player["current_location_id"]
+            current_loc_id = player.current_location_id
             location_data = locations.get(current_loc_id, {})
             room_items = location_data.get("items", [])
 
             if item_id_to_take in room_items:
                 if item_id_to_take == "small_pouch_of_coins":
                     coin_value = items_data.get(item_id_to_take, {}).get("value", 0)
-                    player["coins"] = player.get("coins", 0) + coin_value 
+                    player.coins += coin_value
                     log_game_event("currency_gained", {"amount": coin_value, "unit": "copper", "source": f"take_room_web_{current_loc_id}_{item_id_to_take}", "item_id_source": item_id_to_take, "location_id": current_loc_id})
                     game_response["message"] = f"You picked up the {items_data.get(item_id_to_take, {}).get('name', item_id_to_take)} and gained {coin_value} copper coins."
                     room_items.remove(item_id_to_take)
@@ -716,7 +687,7 @@ def run_minimal_web_server():
                 game_response["location_name"] = location_data.get("name", "Unknown Area")
                 game_response["description"] = location_data.get("description", "An unfamiliar place.")
         
-        elif action == "open worn_crate" and player["current_location_id"] == "generic_start_room":
+        elif action == "open worn_crate" and player.current_location_id == "generic_start_room":
             # This specific handler for "open worn_crate"
             crate = locations["generic_start_room"]["features"]["worn_crate"]
             if crate.get("closed"):
@@ -725,15 +696,15 @@ def run_minimal_web_server():
                 found_items_desc_web = []
                 if items_in_crate:
                     for item_id in items_in_crate:
-                        locations[player["current_location_id"]].setdefault("items", []).append(item_id)
+                        locations[player.current_location_id].setdefault("items", []).append(item_id)
                         found_items_desc_web.append(items_data.get(item_id, {}).get("name", item_id))
                     game_response["message"] += f"\nInside, you find: {', '.join(found_items_desc_web)}."
-                    if player["current_location_id"] == "generic_start_room": # Specific message for starter crate
+                    if player.current_location_id == "generic_start_room": # Specific message for starter crate
                         game_response["message"] += "\nAmong the items, you find a map of a nearby settlement and a small pouch of coins."
                 
                 crate["contains_on_open"] = [] 
                 crate["closed"] = False
-                player["flags"]["found_starter_items"] = True
+                player.flags["found_starter_items"] = True
             else:
                 game_response["message"] = "The crate is already open and empty."
         elif action.startswith('unequip '):
@@ -741,7 +712,7 @@ def run_minimal_web_server():
             # Find the item in equipped slots
             item_id_found_in_equipment = None
             slot_unequipped_from = None
-            player_equipment_data = player.get("equipment", {})
+            player_equipment_data = player.equipment
             for slot, item_id in player_equipment_data.items():
                 if item_id == item_id_to_unequip: # Match by item ID
                     item_id_found_in_equipment = item_id
@@ -749,8 +720,8 @@ def run_minimal_web_server():
                     break
 
             if item_id_found_in_equipment:
-                player["inventory"].append(item_id_found_in_equipment)
-                player["equipment"][slot_unequipped_from] = None
+                player.add_item_to_inventory(item_id_found_in_equipment)
+                player.equipment[slot_unequipped_from] = None
                 game_response["message"] = f"You unequipped {items_data.get(item_id_found_in_equipment,{}).get('name', item_id_found_in_equipment)} from your {slot_unequipped_from.replace('_', ' ')} slot."
                 log_game_event("item_unequipped", {"item_id": item_id_found_in_equipment, "slot": slot_unequipped_from, "moved_to_inventory": True})
                 # TODO: Adjust player stats based on unequipped item
@@ -759,27 +730,27 @@ def run_minimal_web_server():
                 game_response["message"] = f"That item doesn't seem to be equipped."
             
             # Ensure current location data is still part of the response
-            current_loc_id_for_unequip = player.get("current_location_id")
+            current_loc_id_for_unequip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.")
 
         elif action.startswith('equip '):
             item_id_to_equip = action.split(' ', 1)[1]
-            if item_id_to_equip in player.get("inventory", []):
+            if item_id_to_equip in player.inventory:
                 item_details = items_data.get(item_id_to_equip)
                 if item_details and item_details.get("equip_slot"):
                     slot_to_equip_to = item_details["equip_slot"]
                     
                     # Unequip current item in that slot, if any
-                    currently_equipped_item_id = player["equipment"].get(slot_to_equip_to)
+                    currently_equipped_item_id = player.equipment.get(slot_to_equip_to)
                     if currently_equipped_item_id:
-                        player["inventory"].append(currently_equipped_item_id)
+                        player.add_item_to_inventory(currently_equipped_item_id)
                         # Log unequip event if needed
                         log_game_event("item_unequipped", {"item_id": currently_equipped_item_id, "slot": slot_to_equip_to, "moved_to_inventory": True})
                         game_response["message"] = f"You unequipped {items_data.get(currently_equipped_item_id,{}).get('name', currently_equipped_item_id)}.\n"
                     
-                    player["equipment"][slot_to_equip_to] = item_id_to_equip
-                    player["inventory"].remove(item_id_to_equip)
+                    player.equip_item(item_id_to_equip, slot_to_equip_to, item_details.get('name', item_id_to_equip))
+                    player.remove_item_from_inventory(item_id_to_equip)
                     game_response["message"] += f"You equipped {item_details.get('name', item_id_to_equip)}."
                     log_game_event("item_equipped", {"item_id": item_id_to_equip, "slot": slot_to_equip_to})
                     # TODO: Adjust player stats based on equipped item
@@ -788,15 +759,15 @@ def run_minimal_web_server():
             else:
                 game_response["message"] = f"You don't have {items_data.get(item_id_to_equip,{}).get('name', item_id_to_equip)} in your inventory."
             # Ensure current location data is still part of the response
-            current_loc_id_for_equip = player.get("current_location_id")
+            current_loc_id_for_equip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_equip, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_equip, {}).get("description", "An unfamiliar place.")
         elif action == 'sort_inventory_by_id_action':
-            if player.get("inventory"):
-                player["inventory"].sort() # Sorts the list of item IDs alphabetically
+            if player.inventory:
+                player.inventory.sort() # Sorts the list of item IDs alphabetically
                 game_response["message"] = "Inventory sorted by ID."
                 # CRITICAL: Repopulate inventory_list for the response so the UI can update dynamically
-                player_inventory_sorted = player.get("inventory", [])
+                player_inventory_sorted = player.inventory
                 game_response["inventory_list"] = [
                     {
                         "id": item_id,
@@ -809,20 +780,20 @@ def run_minimal_web_server():
             else:
                 game_response["message"] = "Inventory is empty, nothing to sort."
             # Ensure current location data is still part of the response for context
-            current_loc_id_for_sort = player.get("current_location_id")
+            current_loc_id_for_sort = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_sort, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_sort, {}).get("description", "An unfamiliar place.")
         else:
             game_response["message"] = f"The action '{action}' is not fully implemented or recognized for the browser interface yet."
             # Ensure location details are still sent for unrecognized actions
-            current_loc_id_for_else = player.get("current_location_id")
+            current_loc_id_for_else = player.current_location_id
             if current_loc_id_for_else and current_loc_id_for_else in locations:
                 game_response["location_name"] = locations[current_loc_id_for_else].get("name", "Unknown Area")
                 game_response["description"] = locations[current_loc_id_for_else].get("description", "An unfamiliar place.")
 
         # --- Final response assembly ---
         # Ensure current location data is fresh for populating features and items
-        current_loc_id_for_response = player.get("current_location_id")
+        current_loc_id_for_response = player.current_location_id
         current_location_data_for_response = locations.get(current_loc_id_for_response, {})
 
         if not game_response.get("location_name") or game_response.get("location_name") == "Unknown Area":
@@ -857,20 +828,20 @@ def run_minimal_web_server():
         ]
         
         # Always include player stats
-        game_response["player_hp"] = player.get("hp")
-        game_response["player_max_hp"] = player.get("max_hp")
-        game_response["player_name"] = player.get("name")
-        game_response["player_coins"] = player.get("coins", 0)
-        game_response["player_level"] = player.get("level", 1)
-        game_response["player_xp"] = player.get("xp", 0)
-        game_response["player_xp_to_next_level"] = player.get("xp_to_next_level", 100)
-        game_response["player_class_name"] = classes_data.get(player.get("class", ""), {}).get("name", "N/A")
-        game_response["player_species_name"] = species_data.get(player.get("species", ""), {}).get("name", "N/A")
-        game_response["player_attack_power"] = player.get("attack_power", 0)
+        game_response["player_hp"] = player.hp
+        game_response["player_max_hp"] = player.max_hp
+        game_response["player_name"] = player.name
+        game_response["player_coins"] = player.coins
+        game_response["player_level"] = player.level
+        game_response["player_xp"] = player.xp
+        game_response["player_xp_to_next_level"] = player.xp_to_next_level
+        game_response["player_class_name"] = classes_data.get(player.class_id, {}).get("name", "N/A")
+        game_response["player_species_name"] = species_data.get(player.species_id, {}).get("name", "N/A")
+        game_response["player_attack_power"] = player.attack_power
         
         # Populate equipped items names
         game_response["player_equipment"] = {}
-        player_equipment_data = player.get("equipment", {})
+        player_equipment_data = player.equipment
         # Ensure all defined slots are present in the response
         expected_slots = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
         for slot in expected_slots:
@@ -932,31 +903,31 @@ def run_minimal_web_server():
             return jsonify({"error": "Missing character creation data."}), 400
 
         if game_logic.apply_character_choices_and_stats(player, species_id, class_id, player_name, player_gender, species_data, classes_data, save_player_data):
-            player["game_active"] = True 
-            species_info = species_data[player["species"]]
+            # player.game_active is set by apply_character_choices_and_stats
+            species_info = species_data[player.species_id]
             
             start_room_id = "generic_start_room" 
-            player["current_location_id"] = start_room_id
-            class_info_for_items = classes_data[player["class"]]
+            player.current_location_id = start_room_id
+            class_info_for_items = classes_data[player.class_id]
             if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
                 locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info_for_items["starter_items"])
                 locations[start_room_id]["features"]["worn_crate"]["closed"] = True
             
             # Prepare initial scene data for the response
             initial_scene_data = {
-                "message": f"{species_info['backstory_intro']}\nYou feel a pull towards the {locations[start_room_id]['name']}.",
-                "player_hp": player.get("hp"),
-                "player_name": player.get("name"),
-                "player_max_hp": player.get("max_hp"),
-                "location_name": locations.get(player["current_location_id"], {}).get("name"),
-                "description": locations.get(player["current_location_id"], {}).get("description"),
-                "player_coins": player.get("coins", 0),
-                "player_level": player.get("level", 1),
-                "player_xp": player.get("xp", 0),
-                "player_xp_to_next_level": player.get("xp_to_next_level", 100),
-                "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
-                "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
-                "player_attack_power": player.get("attack_power", 0),
+                "message": f"{species_info['backstory_intro']}\nYou feel a pull towards the {locations[start_room_id]['name']}.", # Ensure player.name is set before this
+                "player_hp": player.hp,
+                "player_name": player.name,
+                "player_max_hp": player.max_hp,
+                "location_name": locations.get(player.current_location_id, {}).get("name"),
+                "description": locations.get(player.current_location_id, {}).get("description"),
+                "player_coins": player.coins,
+                "player_level": player.level,
+                "player_xp": player.xp,
+                "player_xp_to_next_level": player.xp_to_next_level,
+                "player_class_name": classes_data.get(player.class_id, {}).get("name", "N/A"),
+                "player_species_name": species_data.get(player.species_id, {}).get("name", "N/A"),
+                "player_attack_power": player.attack_power,
                 "player_equipment": {
                     "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
                     "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
@@ -977,7 +948,7 @@ def run_minimal_web_server():
                     initial_scene_data["interactable_features"].append({"id": f_id, "name": f_id.replace("_", " ").capitalize(), "action": primary_action})
             
             # Populate equipped items for initial scene
-            player_equipment_data_init = player.get("equipment", {})
+            player_equipment_data_init = player.equipment
             expected_slots_init = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
             for slot in expected_slots_init:
                 item_id = player_equipment_data_init.get(slot) # Get item_id from player's equipment dict
@@ -1005,23 +976,23 @@ def run_minimal_web_server():
         
         if load_character_data(character_name):
             # Character data is now in global 'player'
-            current_loc_id = player.get("current_location_id")
+            current_loc_id = player.current_location_id
             current_loc_data = locations.get(current_loc_id, {})
             
             loaded_scene_data = {
-                "message": f"Welcome back, {player.get('name')}!",
-                "player_hp": player.get("hp"),
-                "player_name": player.get("name"),
-                "player_max_hp": player.get("max_hp"),
+                "message": f"Welcome back, {player.name}!",
+                "player_hp": player.hp,
+                "player_name": player.name,
+                "player_max_hp": player.max_hp,
                 "location_name": current_loc_data.get("name"),
                 "description": current_loc_data.get("description"),
-                "player_coins": player.get("coins", 0),
-                "player_level": player.get("level", 1),
-                "player_xp": player.get("xp", 0),
-                "player_xp_to_next_level": player.get("xp_to_next_level", 100),
-                "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
-                "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
-                "player_attack_power": player.get("attack_power", 0),
+                "player_coins": player.coins,
+                "player_level": player.level,
+                "player_xp": player.xp,
+                "player_xp_to_next_level": player.xp_to_next_level,
+                "player_class_name": classes_data.get(player.class_id, {}).get("name", "N/A"),
+                "player_species_name": species_data.get(player.species_id, {}).get("name", "N/A"),
+                "player_attack_power": player.attack_power,
                 "player_equipment": {
                     "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
                     "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
@@ -1046,7 +1017,7 @@ def run_minimal_web_server():
                 for item_id in room_items_list
             ]
             # Populate equipped items for loaded scene
-            player_equipment_data_load = player.get("equipment", {})
+            player_equipment_data_load = player.equipment
             expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
             for slot in expected_slots_load:
                 item_id = player_equipment_data_load.get(slot) # Get item_id from player's equipment dict
@@ -1065,25 +1036,25 @@ def run_minimal_web_server():
         character_name_from_client = data.get('character_name')
 
         # Check if server's current player matches the client's expected character
-        if player.get("game_active") and player.get("name") == character_name_from_client:
+        if player.game_active and player.name == character_name_from_client:
             # Server state is consistent with client's session, return current state
-            current_loc_id = player.get("current_location_id")
+            current_loc_id = player.current_location_id
             current_loc_data = locations.get(current_loc_id, {})
             
             scene_data = {
-                "message": f"Session continued for {player.get('name')}.",
-                "player_hp": player.get("hp"),
-                "player_name": player.get("name"),
-                "player_max_hp": player.get("max_hp"),
+                "message": f"Session continued for {player.name}.",
+                "player_hp": player.hp,
+                "player_name": player.name,
+                "player_max_hp": player.max_hp,
                 "location_name": current_loc_data.get("name"),
                 "description": current_loc_data.get("description"),
-                "player_coins": player.get("coins", 0),
-                "player_level": player.get("level", 1),
-                "player_xp": player.get("xp", 0),
-                "player_xp_to_next_level": player.get("xp_to_next_level", 100),
-                "player_class_name": classes_data.get(player.get("class", ""), {}).get("name", "N/A"),
-                "player_species_name": species_data.get(player.get("species", ""), {}).get("name", "N/A"),
-                "player_attack_power": player.get("attack_power", 0),
+                "player_coins": player.coins,
+                "player_level": player.level,
+                "player_xp": player.xp,
+                "player_xp_to_next_level": player.xp_to_next_level,
+                "player_class_name": classes_data.get(player.class_id, {}).get("name", "N/A"),
+                "player_species_name": species_data.get(player.species_id, {}).get("name", "N/A"),
+                "player_attack_power": player.attack_power,
                 "player_equipment": {
                     "head": "Empty", "shoulders": "Empty", "chest": "Empty", "hands": "Empty",
                     "legs": "Empty", "feet": "Empty", "main_hand": "Empty", "off_hand": "Empty"
@@ -1104,7 +1075,7 @@ def run_minimal_web_server():
                 for item_id in room_items_list ]
             
             # Populate equipped items for resumed scene
-            player_equipment_data_resume = player.get("equipment", {})
+            player_equipment_data_resume = player.equipment
             expected_slots_resume = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand"]
             for slot in expected_slots_resume:
                 item_id = player_equipment_data_resume.get(slot) # Get item_id from player's equipment dict
@@ -1118,16 +1089,16 @@ def run_minimal_web_server():
 
     @flask_app_instance.route('/api/save_game_state', methods=['POST'])
     def save_game_state_route():
-        if not player.get("game_active") or not player.get("name"):
+        if not player.game_active or not player.name:
             return jsonify({"message": "Cannot save: No active character or game not started."}), 400
 
-        current_loc_id = player.get("current_location_id")
+        current_loc_id = player.current_location_id
         current_zone = locations.get(current_loc_id, {}).get("zone")
         if current_zone not in CITY_ZONES:
             return jsonify({"message": "Cannot save here. You must be in a city."}), 403
 
-        if save_player_data(reason_for_save="Game progress saved via web interface"):
-            return jsonify({"message": f"Game saved successfully for {player.get('name')}."})
+        if save_player_data(player, reason_for_save="Game progress saved via web interface"): # Pass player object
+            return jsonify({"message": f"Game saved successfully for {player.name}."})
         return jsonify({"message": "Failed to save game on server."}), 500
 
     @flask_app_instance.route('/test')
@@ -1170,7 +1141,7 @@ def launch_web_interface():
     print("To stop the web server, quit this terminal application (which will stop the daemon thread).")
 
 def show_current_scene():
-    if not player["game_active"]:
+    if not player.game_active:
         print("\nWelcome to the Text RPG Adventure!")
         print("Type '!start' to begin your journey or '!quit' to exit.")
         print("\nAvailable commands:")
@@ -1178,61 +1149,61 @@ def show_current_scene():
         print("  !quit          - Exit the game.")
         return
 
-    if player["dialogue_npc_id"] and player["dialogue_options_pending"]:
-        npc_id = player["dialogue_npc_id"]
-        npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
+    if player.dialogue_npc_id and player.dialogue_options_pending:
+        npc_id = player.dialogue_npc_id
+        npc_data = locations[player.current_location_id]["npcs"][npc_id]
         print(f"\n--- Talking to {npc_data['name']} ---")
         print("Choose an option:")
-        for key, option_data in player["dialogue_options_pending"].items():
+        for key, option_data in player.dialogue_options_pending.items():
             print(f"  {key}. {option_data['text']}")
         print("\n(Type the number of your choice, or 'leave' to end conversation)")
         return
 
-    if player["combat_target_id"]:
-        npc_id = player["combat_target_id"]
-        if npc_id not in locations[player["current_location_id"]]["npcs"]:
+    if player.combat_target_id:
+        npc_id = player.combat_target_id
+        if npc_id not in locations[player.current_location_id]["npcs"]:
             print(f"[Error] Combat target {npc_id} not found. Ending combat.")
-            player["combat_target_id"] = None
+            player.combat_target_id = None
         else:
-            npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
+            npc_data = locations[player.current_location_id]["npcs"][npc_id]
             print("\n--- IN COMBAT ---")
-            print(f"Your HP: {player['hp']}/{player['max_hp']}")
+            print(f"Your HP: {player.hp}/{player.max_hp}")
             print(f"Enemy: {npc_data['name']} | HP: {npc_data['hp']}/{npc_data['max_hp']}")
             print(HOSTILE_MOB_VISUAL)
             
             print("\nCombat Commands:")
             print("  attack                  - Perform a basic attack.")
-            for move_id, move_data in player["special_moves"].items():
-                cooldown_status = f"(Ready)" if player["special_cooldowns"].get(move_id, 0) == 0 else f"(Cooldown: {player['special_cooldowns'].get(move_id, 0)})"
+            for move_id, move_data in player.special_moves.items():
+                cooldown_status = f"(Ready)" if player.special_cooldowns.get(move_id, 0) == 0 else f"(Cooldown: {player.special_cooldowns.get(move_id, 0)})"
                 print(f"  special {move_id.replace('_',' ')}   - {move_data['description']} {cooldown_status}")
             print("  deflect                 - Reduce damage from the next attack.")
             print("  item <item_name>        - Use an item from your inventory.")
             return 
 
-    loc_id = player["current_location_id"]
+    loc_id = player.current_location_id
     if loc_id not in locations:
         print(f"\n[ERROR] Current location '{loc_id}' not found. Resetting.")
-        player["current_location_id"] = "generic_start_room" # Default to start room if error
-        loc_id = player["current_location_id"]
+        player.current_location_id = "generic_start_room" # Default to start room if error
+        loc_id = player.current_location_id
     
     location_data = locations[loc_id]
-    print(f"\n--- {location_data['name']} (HP: {player['hp']}/{player['max_hp']}) ---")
-    if player.get("species") and player.get("class"):
-        player_name_display = player.get("name", "Adventurer")
-        species_name = species_data.get(player['species'], {}).get('name', 'Unknown Species')
-        class_name = classes_data.get(player['class'], {}).get('name', 'Unknown Class')
-        gender_display = player.get('gender', 'Unspecified')
+    print(f"\n--- {location_data['name']} (HP: {player.hp}/{player.max_hp}) ---")
+    if player.species_id and player.class_id:
+        player_name_display = player.name if player.name else "Adventurer"
+        species_name = species_data.get(player.species_id, {}).get('name', 'Unknown Species')
+        class_name = classes_data.get(player.class_id, {}).get('name', 'Unknown Class')
+        gender_display = player.gender if player.gender else 'Unspecified'
         print(f"    ({player_name_display} - {gender_display} {species_name} {class_name})")
 
     print(location_data["description"])
-    if loc_id == "generic_start_room" and not player["flags"].get("found_starter_items"):
+    if loc_id == "generic_start_room" and not player.flags.get("found_starter_items"):
         print("The air is thick with anticipation. You feel compelled to check the worn crate.")
 
 
     room_npcs = location_data.get("npcs", {})
     hostiles_present_desc = False
     for npc_id, npc_data in room_npcs.items():
-        if npc_data.get("hostile") and player["combat_target_id"] != npc_id :
+        if npc_data.get("hostile") and player.combat_target_id != npc_id :
             if not hostiles_present_desc:
                 print("\nDanger!")
                 hostiles_present_desc = True
@@ -1255,7 +1226,7 @@ def show_current_scene():
     if room_npcs:
         print("\nPeople here:")
         for npc_id, npc_data in room_npcs.items():
-            if not npc_data.get("hostile") or (npc_data.get("hostile") and player["combat_target_id"] != npc_id):
+            if not npc_data.get("hostile") or (npc_data.get("hostile") and player.combat_target_id != npc_id):
                  print(f"  - {npc_data['name']} ({npc_data.get('description', 'An interesting individual.')})")
     
     room_items = location_data.get("items", [])
@@ -1278,7 +1249,7 @@ def show_current_scene():
         print(f"    (Available exits: {', '.join(location_data['exits'].keys())})")
     if room_items: print(f"  take <item>")
     
-    inv_status = "(empty)" if not player["inventory"] else f"({len(player['inventory'])} item(s))"
+    inv_status = "(empty)" if not player.inventory else f"({len(player.inventory)} item(s))"
     print(f"  inventory (i)  - Check your inventory {inv_status}.")
 
     if "features" in location_data:
@@ -1290,8 +1261,8 @@ def show_current_scene():
                 print(f"  open worn crate") # Or search, depending on defined actions
                 break
     
-    if any(not npc.get("hostile") or (npc.get("hostile") and player["combat_target_id"] != npc_id) for npc_id, npc in room_npcs.items()):
-        available_to_talk = [npc["name"] for npc_id, npc in room_npcs.items() if not npc.get("hostile") or (npc.get("hostile") and player["combat_target_id"] != npc_id)]
+    if any(not npc.get("hostile") or (npc.get("hostile") and player.combat_target_id != npc_id) for npc_id, npc in room_npcs.items()):
+        available_to_talk = [npc["name"] for npc_id, npc in room_npcs.items() if not npc.get("hostile") or (npc.get("hostile") and player.combat_target_id != npc_id)]
         if available_to_talk:
             print(f"  talk <npc_name>")
             if len(available_to_talk) <= 3:
@@ -1354,7 +1325,7 @@ def process_command(full_command_input):
     args = parts[1:]
 
     if command == "!start":
-        if player["game_active"]: print("The game has already started!")
+        if player.game_active: print("The game has already started!")
         else:
             initialize_game_state() 
         return True
@@ -1362,10 +1333,10 @@ def process_command(full_command_input):
         launch_web_interface()
         return True
     elif command == "!save":
-        if not player["game_active"]:
+        if not player.game_active:
             print("Game not active. Cannot save.")
             return True
-        current_zone = locations[player["current_location_id"]].get("zone")
+        current_zone = locations[player.current_location_id].get("zone")
         if current_zone in CITY_ZONES:
             save_player_data(player, reason_for_save="Game progress manually saved")
         else:
@@ -1376,52 +1347,52 @@ def process_command(full_command_input):
         load_all_game_data()
         return True # Show scene again to reflect any changes
     elif command == "!quit": 
-        print(f"\nYou decide to end your adventure here. Farewell!" if player["game_active"] else "\nFarewell!")
+        print(f"\nYou decide to end your adventure here. Farewell!" if player.game_active else "\nFarewell!")
         return False
     
-    if not player["game_active"]:
+    if not player.game_active:
         print(f"Unknown command: '{full_command}'. Type '!start' to begin.")
         return True
 
-    if player["dialogue_npc_id"] and player["dialogue_options_pending"]:
-        npc_id = player["dialogue_npc_id"]
-        npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
+    if player.dialogue_npc_id and player.dialogue_options_pending:
+        npc_id = player.dialogue_npc_id
+        npc_data = locations[player.current_location_id]["npcs"][npc_id]
         
         if full_command == "leave":
             print(f"You end the conversation with {npc_data['name']}.")
-            player["dialogue_npc_id"] = None
-            player["dialogue_options_pending"] = {}
+            player.dialogue_npc_id = None
+            player.dialogue_options_pending = {}
             return True
 
-        chosen_option_data = player["dialogue_options_pending"].get(full_command) 
+        chosen_option_data = player.dialogue_options_pending.get(full_command)
         if chosen_option_data:
             print(f"\n> {chosen_option_data['text']}") 
             if chosen_option_data.get("response"):
                 print(f"{npc_data['name']} says: \"{chosen_option_data['response']}\"")
             
             if chosen_option_data.get("triggers_combat"):
-                player["dialogue_npc_id"] = None 
-                player["dialogue_options_pending"] = {}
+                player.dialogue_npc_id = None
+                player.dialogue_options_pending = {}
                 start_combat(npc_id)
             elif chosen_option_data.get("action_type") == "end_conversation":
-                player["dialogue_npc_id"] = None
-                player["dialogue_options_pending"] = {}
+                player.dialogue_npc_id = None
+                player.dialogue_options_pending = {}
         else:
             print("Invalid choice. Please type the number of the option or 'leave'.")
         return True 
 
-    if player["combat_target_id"]:
-        npc_id = player["combat_target_id"]
-        if npc_id not in locations[player["current_location_id"]]["npcs"]:
+    if player.combat_target_id:
+        npc_id = player.combat_target_id
+        if npc_id not in locations[player.current_location_id]["npcs"]:
             print(f"[Warning] Target {npc_id} seems to be gone. Ending combat.")
-            player["combat_target_id"] = None
+            player.combat_target_id = None
             return True 
 
-        npc_data = locations[player["current_location_id"]]["npcs"][npc_id]
+        npc_data = locations[player.current_location_id]["npcs"][npc_id]
         action_taken = False
 
         if command == "attack":
-            damage = player["attack_power"]
+            damage = player.attack_power
             npc_data["hp"] -= damage
             print(f"You attack {npc_data['name']} for {damage} damage.")
             if npc_data["hp"] <= 0:
@@ -1431,22 +1402,22 @@ def process_command(full_command_input):
             if not args: print("Which special move? (Specify the move like 'special power strike')")
             else:
                 move_input = "_".join(args) 
-                if move_input in player["special_moves"]:
-                    if player["special_cooldowns"].get(move_input, 0) == 0:
-                        move_details = player["special_moves"][move_input]
-                        damage = int(player["attack_power"] * move_details["damage_multiplier"])
+                if move_input in player.special_moves:
+                    if player.special_cooldowns.get(move_input, 0) == 0:
+                        move_details = player.special_moves[move_input]
+                        damage = int(player.attack_power * move_details["damage_multiplier"])
                         npc_data["hp"] -= damage
                         print(f"You use {move_details['name']} on {npc_data['name']} for {damage} damage!")
-                        player["special_cooldowns"][move_input] = move_details["cooldown_max"]
+                        player.special_cooldowns[move_input] = move_details["cooldown_max"]
                         if npc_data["hp"] <= 0:
                             handle_npc_defeat(npc_id)
                         action_taken = True
                     else:
-                        print(f"{player['special_moves'][move_input]['name']} is on cooldown ({player['special_cooldowns'][move_input]} turns left).")
+                        print(f"{player.special_moves[move_input]['name']} is on cooldown ({player.special_cooldowns[move_input]} turns left).")
                 else:
                     print(f"You don't know a special move called '{' '.join(args)}'.")
         elif command == "deflect":
-            player["is_deflecting"] = True
+            player.is_deflecting = True
             print("You brace yourself, preparing to deflect the next attack.")
             action_taken = True
         elif command == "item":
@@ -1454,7 +1425,7 @@ def process_command(full_command_input):
             else:
                 item_name_input = " ".join(args)
                 item_id_to_use = None
-                for inv_item_id in player["inventory"]:
+                for inv_item_id in player.inventory:
                     if item_name_input == items_data.get(inv_item_id, {}).get("name", "").lower() or \
                        item_name_input == inv_item_id.replace("_", " "):
                         item_id_to_use = inv_item_id
@@ -1464,9 +1435,9 @@ def process_command(full_command_input):
                     item_detail = items_data.get(item_id_to_use)
                     if item_detail and item_detail["type"] == "consumable" and item_detail["effect"] == "heal":
                         heal_amount = item_detail["amount"]
-                        player["hp"] = min(player["max_hp"], player["hp"] + heal_amount)
-                        player["inventory"].remove(item_id_to_use)
-                        print(f"You use the {item_detail['name']} and restore {heal_amount} HP. You now have {player['hp']}/{player['max_hp']} HP.")
+                        player.heal(heal_amount) # Use method
+                        player.remove_item_from_inventory(item_id_to_use) # Use method
+                        print(f"You use the {item_detail['name']} and restore {heal_amount} HP. You now have {player.hp}/{player.max_hp} HP.")
                         action_taken = True 
                     else:
                         print(f"You can't use the {item_name_input} in that way right now.")
@@ -1476,7 +1447,7 @@ def process_command(full_command_input):
             print(f"Unknown combat command: '{command}'. Valid commands: attack, special, deflect, item.")
         
         # After player action in combat, check if combat should continue (NPC still alive)
-        if action_taken and player["combat_target_id"] and player["game_active"]: 
+        if action_taken and player.combat_target_id and player.game_active:
             npc_combat_turn()
         return True 
 
@@ -1489,29 +1460,29 @@ def process_command(full_command_input):
             # Find the item in equipped slots
             item_id_to_unequip = None
             slot_unequipped_from = None
-            for slot, item_id in player.get("equipment", {}).items():
+            for slot, item_id in player.equipment.items():
                 if item_id and (item_name_input == items_data.get(item_id, {}).get("name", "").lower() or item_name_input == item_id.replace("_", " ")):
                     item_id_to_unequip = item_id
                     slot_unequipped_from = slot
                     break
             if item_id_to_unequip:
-                player["inventory"].append(item_id_to_unequip)
-                player["equipment"][slot_unequipped_from] = None
+                player.add_item_to_inventory(item_id_to_unequip)
+                player.equipment[slot_unequipped_from] = None
                 print(f"You unequipped {items_data.get(item_id_to_unequip,{}).get('name', item_id_to_unequip)} from your {slot_unequipped_from.replace('_', ' ')} slot.")
             else:
                 print(f"You don't have '{item_name_input}' equipped.")
         return True # Command processed, show scene again
     # --- End Unequip Command Handler (Terminal) ---
 
-        if action_taken and player["combat_target_id"] and player["game_active"]: 
+        if action_taken and player.combat_target_id and player.game_active:
             npc_combat_turn()
         return True 
 
-    loc_id = player["current_location_id"]
+    loc_id = player.current_location_id
     location_data = locations[loc_id]
 
     if command == "!map" or (command == "view" and " ".join(args) == "map scroll"): # Allow "view map scroll"
-        if command == "view" and "blank_map_scroll" not in player["inventory"]:
+        if command == "view" and "blank_map_scroll" not in player.inventory:
             print("You don't have a map scroll to view.")
             return True
         if command == "view":
@@ -1526,11 +1497,11 @@ def process_command(full_command_input):
         else:
             direction = args[0]
             if direction in location_data.get("exits", {}):
-                player["current_location_id"] = location_data["exits"][direction]
+                player.current_location_id = location_data["exits"][direction]
                 print(f"You walk {direction}.")
             else: print(f"You can't go {direction} from here.")
     elif command == "open" and " ".join(args) == "worn crate": # Specific for starter task
-        if player["current_location_id"] == "generic_start_room":
+        if player.current_location_id == "generic_start_room":
             crate = locations["generic_start_room"]["features"]["worn_crate"]
             if crate["closed"]:
                 # Use the environmental interaction handler for consistency
@@ -1556,7 +1527,7 @@ def process_command(full_command_input):
                 if item_name_input == current_item_name_lower or item_name_input == current_item_id_as_name:
                     if r_item_id == "small_pouch_of_coins":
                         coin_value = item_data.get("value", 0)
-                        player["coins"] = player.get("coins", 0) + coin_value 
+                        player.coins += coin_value
                         log_game_event("currency_gained", {"amount": coin_value, "unit": "copper", "source": f"take_room_{loc_id}_{r_item_id}", "item_id_source": r_item_id, "location_id": loc_id})
                         print(f"You picked up the {item_data.get('name', r_item_id)} and gained {coin_value} copper coins.")
                         room_items.remove(r_item_id) # Remove from the original list
@@ -1573,16 +1544,16 @@ def process_command(full_command_input):
                 print(f"There is no {item_name_input} here to take.")
 
     elif command == "inventory" or command == "i":
-        if player["inventory"]:
+        if player.inventory:
             print("\nYou are carrying:")
-            for item_id in player["inventory"]: print(f"  - {items_data.get(item_id, {}).get('name', item_id.replace('_',' '))}")
+            for item_id in player.inventory: print(f"  - {items_data.get(item_id, {}).get('name', item_id.replace('_',' '))}")
         else: print("Your inventory is empty.")
     elif command == "use":
         if len(args) < 3 or args[1] != "on": print("How to use: 'use <item_name> on <target_name>'")
         else:
             item_input = args[0]
             target_input = args[2]
-            item_in_inv_id = next((inv_id for inv_id in player["inventory"] if item_input == items_data.get(inv_id,{}).get("name","").lower() or item_input == inv_id.replace("_"," ")), None)
+            item_in_inv_id = next((inv_id for inv_id in player.inventory if item_input == items_data.get(inv_id,{}).get("name","").lower() or item_input == inv_id.replace("_"," ")), None)
             target_feature_id = next((f_id for f_id in location_data.get("features",{}).keys() if target_input == f_id.replace("_"," ")), None)
 
             if not item_in_inv_id: print(f"You don't have a {item_input}.")
@@ -1600,7 +1571,7 @@ def process_command(full_command_input):
                         log_game_event("feature_item_revealed", {
                             "feature_id": target_feature_id,
                             "revealed_item_id": new_item,
-                            "location_id": player.get("current_location_id")
+                            "location_id": player.current_location_id
                         })
                         print(f"The {target_feature_id.replace('_', ' ')} creaks open. You see a {items_data.get(new_item,{}).get('name',new_item)} inside!")
                 elif not feature.get("locked"): print(f"The {target_feature_id.replace('_', ' ')} is already unlocked/used.")
@@ -1616,10 +1587,10 @@ def process_command(full_command_input):
                 print(f"\nYou approach {npc_data_found['name']}.")
                 if npc_data_found.get("pre_combat_dialogue") and npc_data_found.get("dialogue_options"):
                     print(f"{npc_data_found['name']} says: \"{npc_data_found['pre_combat_dialogue']}\"")
-                    player["dialogue_npc_id"] = found_npc_id
-                    player["dialogue_options_pending"] = npc_data_found["dialogue_options"]
+                    player.dialogue_npc_id = found_npc_id
+                    player.dialogue_options_pending = npc_data_found["dialogue_options"]
                 elif npc_data_found.get("type") == "quest_giver_simple":
-                    if npc_data_found.get("quest_item_needed") in player["inventory"]:
+                    if npc_data_found.get("quest_item_needed") in player.inventory:
                         print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_complete', 'Thank you!')}\"")
                         game_logic.remove_item_from_player_inventory(player, items_data, npc_data_found["quest_item_needed"], source=f"quest_turn_in_{found_npc_id}", log_event_func=log_game_event)
                         if npc_data_found.get("quest_reward_item"):
@@ -1656,32 +1627,32 @@ def process_command(full_command_input):
     return True
 
 def main_game_loop():
-    if not player["game_active"]:
+    if not player.game_active:
         show_current_scene() # Shows initial welcome
     else:
         show_current_scene() # Shows the scene for the current location if game is active
 
     while True:
         prompt_text = "> "
-        if player["game_active"]:
-            if player["dialogue_npc_id"] and player["dialogue_options_pending"]:
+        if player.game_active:
+            if player.dialogue_npc_id and player.dialogue_options_pending:
                 prompt_text = "[DIALOGUE] > "
-            elif player["combat_target_id"]:
+            elif player.combat_target_id:
                 prompt_text = "[COMBAT] > "
-            elif player["current_location_id"] and player["current_location_id"] in locations:
-                loc_name = locations[player["current_location_id"]]["name"]
+            elif player.current_location_id and player.current_location_id in locations:
+                loc_name = locations[player.current_location_id]["name"]
                 prompt_text = f"[{loc_name}] > "
             else: 
                 # This case should ideally not be reached if game_active is true and character creation sets a location
                 print("[Error: Current location unknown, but game is active. Resetting to start room.]")
-                player["current_location_id"] = "generic_start_room" 
+                player.current_location_id = "generic_start_room"
         
         user_input = input(prompt_text)
         if not process_command(user_input): break 
         
-        if player["game_active"]: 
+        if player.game_active:
             show_current_scene()
-        elif not player["game_active"] and player["combat_target_id"] is None and player["dialogue_npc_id"] is None : 
+        elif not player.game_active and player.combat_target_id is None and player.dialogue_npc_id is None :
              # Game ended not due to combat/dialogue, or character creation was cancelled
              break 
 
@@ -1774,5 +1745,5 @@ if __name__ == "__main__":
                  initialize_game_state() # Ensure game starts if browser failed but CC was intended
 
     # Only run main_game_loop if not exclusively in browser mode or if browser failed to start
-    if player["game_active"] or (not start_browser_on_launch and not player["game_active"]):
+    if player.game_active or (not start_browser_on_launch and not player.game_active):
         main_game_loop()
