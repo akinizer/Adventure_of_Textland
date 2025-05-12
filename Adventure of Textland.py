@@ -368,7 +368,7 @@ def initialize_game_state():
     print(f"\n{species_info['backstory_intro']}")
 
     start_room_id = "generic_start_room" 
-    player.current_location_id = start_room_id
+    player.move_to(start_room_id)
     class_info = classes_data[player.class_id]
     if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
         locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info["starter_items"])
@@ -393,31 +393,6 @@ def handle_player_defeat():
     player.dialogue_options_pending = {}
     player.combat_target_id = None
 
-def award_xp(amount):
-    """Awards XP to the player and checks for level up."""
-    if not player.game_active:
-        return
-
-    player.xp += amount
-    print(f"You gained {amount} XP.")
-    log_game_event("xp_gained", {"amount": amount, "current_xp": player.xp, "level": player.level})
-
-    while player.xp >= player.xp_to_next_level:
-        player.level += 1
-        player.xp -= player.xp_to_next_level # Subtract XP used for this level
-        # Increase XP needed for the *next* level (e.g., 50% more than previous)
-        player.xp_to_next_level = int(player.xp_to_next_level * 1.5)
-        
-        # Apply level-up bonuses (example)
-        player.max_hp += 10
-        player.hp = player.max_hp # Full heal on level up
-        player.attack_power += 2
-
-        print(f"\n*** LEVEL UP! You are now Level {player.level}! ***")
-        print(f"Max HP increased to {player.max_hp}. Attack Power increased to {player.attack_power}.")
-        print(f"XP to next level: {player.xp_to_next_level}. Current XP: {player.xp}.")
-        log_game_event("level_up", {"new_level": player.level, "max_hp": player.max_hp, "attack_power": player.attack_power})
-
 def handle_npc_defeat(npc_id):
     current_loc_data = locations[player.current_location_id]
     npc_data = current_loc_data["npcs"][npc_id]
@@ -441,7 +416,7 @@ def handle_npc_defeat(npc_id):
     
     # Award XP for defeating NPC
     xp_reward = npc_data.get("xp_reward", 25) # Default XP or define in NPC data
-    award_xp(xp_reward)
+    player.add_xp(xp_reward, log_event_func=log_game_event)
 
     del current_loc_data["npcs"][npc_id]
     player.combat_target_id = None
@@ -478,9 +453,7 @@ def npc_combat_turn():
     if player.hp <= 0:
         handle_player_defeat()
     
-    for move in player.special_cooldowns:
-        if player.special_cooldowns[move] > 0:
-            player.special_cooldowns[move] -= 1
+    player.update_special_cooldowns()
 
 @trace_function_calls
 def handle_environmental_interaction(feature_id, action_verb):
@@ -622,8 +595,8 @@ def run_minimal_web_server():
             current_location_data = locations.get(current_loc_id, {})
             
             if direction in current_location_data.get("exits", {}):
-                player.current_location_id = current_location_data["exits"][direction]
-                new_loc_id = player.current_location_id
+                player.move_to(current_location_data["exits"][direction])
+                new_loc_id = player.current_location_id # Get the new location ID after moving
                 new_location_data = locations.get(new_loc_id, {})
                 game_response["message"] = f"You walk {direction}."
                 game_response["location_name"] = new_location_data.get("name", "Unknown Area")
@@ -670,8 +643,7 @@ def run_minimal_web_server():
             if item_id_to_take in room_items:
                 if item_id_to_take == "small_pouch_of_coins":
                     coin_value = items_data.get(item_id_to_take, {}).get("value", 0)
-                    player.coins += coin_value
-                    log_game_event("currency_gained", {"amount": coin_value, "unit": "copper", "source": f"take_room_web_{current_loc_id}_{item_id_to_take}", "item_id_source": item_id_to_take, "location_id": current_loc_id})
+                    player.add_coins(coin_value, log_event_func=log_game_event, source=f"take_room_web_{current_loc_id}_{item_id_to_take}")
                     game_response["message"] = f"You picked up the {items_data.get(item_id_to_take, {}).get('name', item_id_to_take)} and gained {coin_value} copper coins."
                     room_items.remove(item_id_to_take)
                 else:
@@ -1497,7 +1469,7 @@ def process_command(full_command_input):
         else:
             direction = args[0]
             if direction in location_data.get("exits", {}):
-                player.current_location_id = location_data["exits"][direction]
+                player.move_to(location_data["exits"][direction])
                 print(f"You walk {direction}.")
             else: print(f"You can't go {direction} from here.")
     elif command == "open" and " ".join(args) == "worn crate": # Specific for starter task
@@ -1527,8 +1499,7 @@ def process_command(full_command_input):
                 if item_name_input == current_item_name_lower or item_name_input == current_item_id_as_name:
                     if r_item_id == "small_pouch_of_coins":
                         coin_value = item_data.get("value", 0)
-                        player.coins += coin_value
-                        log_game_event("currency_gained", {"amount": coin_value, "unit": "copper", "source": f"take_room_{loc_id}_{r_item_id}", "item_id_source": r_item_id, "location_id": loc_id})
+                        player.add_coins(coin_value, log_event_func=log_game_event, source=f"take_room_{loc_id}_{r_item_id}")
                         print(f"You picked up the {item_data.get('name', r_item_id)} and gained {coin_value} copper coins.")
                         room_items.remove(r_item_id) # Remove from the original list
                         item_to_take = "currency_handled" 
@@ -1598,8 +1569,8 @@ def process_command(full_command_input):
 
                         # If there's a currency reward for the quest
                         if npc_data_found.get("quest_reward_currency"):
-                            log_game_event("currency_gained", {"amount": npc_data_found["quest_reward_currency"], "source": f"quest_reward_{found_npc_id}", "location_id": loc_id})
-                            print(f"You are also rewarded with {npc_data_found['quest_reward_currency']} coins.")
+                            player.add_coins(npc_data_found["quest_reward_currency"], log_event_func=log_game_event, source=f"quest_reward_{found_npc_id}")
+                            print(f"You are also rewarded with {npc_data_found['quest_reward_currency']} coins.") # Message for terminal
                     else:
                         print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_incomplete', npc_data_found['dialogue'])}\"")
                 elif npc_data_found.get("hostile"): 
@@ -1645,7 +1616,7 @@ def main_game_loop():
             else: 
                 # This case should ideally not be reached if game_active is true and character creation sets a location
                 print("[Error: Current location unknown, but game is active. Resetting to start room.]")
-                player.current_location_id = "generic_start_room"
+                player.move_to("generic_start_room")
         
         user_input = input(prompt_text)
         if not process_command(user_input): break 

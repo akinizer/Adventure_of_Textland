@@ -31,6 +31,10 @@ class Player:
         }
         self.is_paused = False
 
+    def move_to(self, new_location_id):
+        self.current_location_id = new_location_id
+        # print(f"{self.name} moves to {new_location_id}.")
+
     def take_damage(self, amount):
         self.hp -= amount
         if self.hp < 0:
@@ -59,3 +63,43 @@ class Player:
         # More complex logic (unequipping old, stat changes) would go here or be called from here.
         self.equipment[slot] = item_id
         # print(f"{item_name} equipped to {slot}.")
+
+    def add_xp(self, amount, log_event_func=None):
+        """Awards XP to the player and handles leveling up."""
+        if not self.game_active:
+            return
+
+        self.xp += amount
+        print(f"You gained {amount} XP.")
+        if log_event_func:
+            log_event_func("xp_gained", {"amount": amount, "current_xp": self.xp, "level": self.level, "player_name": self.name})
+
+        leveled_up_this_cycle = False
+        while self.xp >= self.xp_to_next_level:
+            leveled_up_this_cycle = True
+            self.level += 1
+            self.xp -= self.xp_to_next_level
+            self.xp_to_next_level = int(self.xp_to_next_level * 1.5)
+            
+            # Apply level-up bonuses
+            self.max_hp += 10
+            self.hp = self.max_hp # Full heal
+            self.attack_power += 2
+
+            print(f"\n*** LEVEL UP! You are now Level {self.level}! ***")
+            print(f"Max HP increased to {self.max_hp}. Attack Power increased to {self.attack_power}.")
+            print(f"XP to next level: {self.xp_to_next_level}. Current XP: {self.xp}.")
+            if log_event_func:
+                log_event_func("level_up", {"new_level": self.level, "max_hp": self.max_hp, "attack_power": self.attack_power, "player_name": self.name})
+        return leveled_up_this_cycle
+
+    def add_coins(self, amount, log_event_func=None, source="unknown"):
+        self.coins += amount
+        if log_event_func:
+            log_event_func("currency_gained", {"amount": amount, "unit": "copper", "source": source, "player_name": self.name, "location_id": self.current_location_id})
+        # print(f"Gained {amount} coins. Total: {self.coins}")
+
+    def update_special_cooldowns(self):
+        for move in self.special_cooldowns:
+            if self.special_cooldowns[move] > 0:
+                self.special_cooldowns[move] -= 1
