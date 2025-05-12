@@ -420,6 +420,8 @@ player = {
     "dialogue_npc_id": None,
     "dialogue_options_pending": {},
     "flags": {},
+    "coins": 0, # Player's currency
+    "level": 1, # Player's level
     "is_paused": False # New flag for game pause state
 }
 
@@ -680,6 +682,8 @@ def _apply_character_choices_and_stats(species_id, class_id, char_name, char_gen
     player["special_cooldowns"] = {move_id: 0 for move_id in player["special_moves"]}    
     # Give basic starting items directly after character creation
     player["inventory"] = ["simple_knife", "blank_map_scroll"] 
+    player["coins"] = 0 # Initialize coins
+    player["level"] = 1 # Initialize level
     player["flags"] = {} # Reset flags for a new character
 
     print(f"\nCharacter '{player['name']}' ({player['gender']} {species_info['name']} {class_info['name']}) created!")
@@ -939,6 +943,9 @@ def run_minimal_web_server():
                     <button id="settings-gear-button">⚙️</button>
                 </div>
                 <div id="game-interface" style="display: none;"> <!-- Initially hidden -->
+                    <div id="dynamic-header-info" style="padding: 5px; margin-bottom: 5px; border: 1px solid #ccc; font-weight: bold; background-color: #e9ecef;">
+                        <!-- Dynamic header will be populated here by JS -->
+                    </div>
                     <div id="game-output" class="output-area">
                         <!-- Game messages will appear here -->
                     </div>
@@ -1320,9 +1327,8 @@ def run_minimal_web_server():
                     if (actionStringEcho) { // Optionally echo the command that led to this scene
                         const p_command_echo = document.createElement('p');
                         p_command_echo.innerHTML = `<strong>&gt; ${actionStringEcho}</strong>`;
-                        outputElement.appendChild(p_command_echo);
+                            outputElement.appendChild(p_command_echo);
                     }
-
                         if(data.location_name) {
                             const p_loc_name = document.createElement('p');
                             p_loc_name.innerHTML = `--- ${data.location_name} (HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'}/${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}) ${data.player_name ? '('+data.player_name+')' : ''}`;
@@ -1336,7 +1342,14 @@ def run_minimal_web_server():
                         const p_message = document.createElement('p'); 
                         if(data.message && data.message.trim() !== "") p_message.textContent = data.message; 
                         outputElement.appendChild(p_message);
-
+                        
+                        // Update dynamic header
+                        const headerInfoDiv = document.getElementById('dynamic-header-info');
+                        if (headerInfoDiv) {
+                            // Ensure header is visible only when game interface is active
+                            headerInfoDiv.style.display = document.getElementById('game-interface').style.display === 'block' ? 'block' : 'none';
+                            headerInfoDiv.textContent = `Location: ${data.location_name || 'Unknown'} | Coins: ${data.player_coins !== undefined ? data.player_coins : 'N/A'} | Level: ${data.player_level !== undefined ? data.player_level : 'N/A'} | Player: ${data.player_name || 'Adventurer'}`;
+                        }
                         if(data.map_lines && Array.isArray(data.map_lines)) { 
                             data.map_lines.forEach(line => {
                                 const p_map_line = document.createElement('p');
@@ -1487,6 +1500,8 @@ def run_minimal_web_server():
             "player_max_hp": player.get("max_hp"),
             "location_name": "Unknown Area", # Default
             "description": "An unfamiliar place.", # Default
+            "player_coins": player.get("coins", 0),
+            "player_level": player.get("level", 1),
             "interactable_features": [], 
             "room_items": [], # List of items in the room
             "can_save_in_city": False # Default save status
@@ -1553,7 +1568,7 @@ def run_minimal_web_server():
             if item_id_to_take in room_items:
                 if item_id_to_take == "small_pouch_of_coins":
                     coin_value = items_data.get(item_id_to_take, {}).get("value", 0)
-                    # player["coins"] = player.get("coins", 0) + coin_value # Placeholder for actual currency tracking
+                    player["coins"] = player.get("coins", 0) + coin_value 
                     log_game_event("currency_gained", {"amount": coin_value, "source": f"take_room_web_{current_loc_id}_{item_id_to_take}", "item_id_source": item_id_to_take, "location_id": current_loc_id})
                     game_response["message"] = f"You picked up the {items_data.get(item_id_to_take, {}).get('name', item_id_to_take)} and gained {coin_value} coins."
                     room_items.remove(item_id_to_take)
@@ -1638,7 +1653,9 @@ def run_minimal_web_server():
         game_response["player_hp"] = player.get("hp")
         game_response["player_max_hp"] = player.get("max_hp")
         game_response["player_name"] = player.get("name")
-        
+        game_response["player_coins"] = player.get("coins", 0)
+        game_response["player_level"] = player.get("level", 1)
+
         # Determine if saving is allowed
         current_zone_for_save = current_location_data_for_response.get("zone")
         game_response["can_save_in_city"] = current_zone_for_save in CITY_ZONES
@@ -1705,6 +1722,8 @@ def run_minimal_web_server():
                 "player_max_hp": player.get("max_hp"),
                 "location_name": locations.get(player["current_location_id"], {}).get("name"),
                 "description": locations.get(player["current_location_id"], {}).get("description"),
+                "player_coins": player.get("coins", 0),
+                "player_level": player.get("level", 1),
                 "interactable_features": [], # Will be populated by final assembly logic
                 "room_items": [] # Will be populated by final assembly logic
             }
@@ -1747,6 +1766,8 @@ def run_minimal_web_server():
                 "player_max_hp": player.get("max_hp"),
                 "location_name": current_loc_data.get("name"),
                 "description": current_loc_data.get("description"),
+                "player_coins": player.get("coins", 0),
+                "player_level": player.get("level", 1),
                 "interactable_features": [],
                 "room_items": []
             }
@@ -2177,7 +2198,7 @@ def process_command(full_command_input):
                 if item_name_input == current_item_name_lower or item_name_input == current_item_id_as_name:
                     if r_item_id == "small_pouch_of_coins":
                         coin_value = item_data.get("value", 0)
-                        # player["coins"] = player.get("coins", 0) + coin_value # Example for direct currency update
+                        player["coins"] = player.get("coins", 0) + coin_value 
                         log_game_event("currency_gained", {"amount": coin_value, "source": f"take_room_{loc_id}_{r_item_id}", "item_id_source": r_item_id, "location_id": loc_id})
                         print(f"You picked up the {item_data.get('name', r_item_id)} and gained {coin_value} coins.")
                         room_items.remove(r_item_id) # Remove from the original list
