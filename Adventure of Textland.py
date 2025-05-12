@@ -341,7 +341,12 @@ items_data = {
     "boar_tusk": {"name": "Boar Tusk", "type": "material", "description": "A sharp tusk from a wild boar."},
     "raw_meat": {"name": "Raw Meat", "type": "food_raw", "description": "A fresh slab of raw meat. Needs cooking."},
     "strange_berries": {"name": "Strange Berries", "type": "food_raw", "description": "Some unusual looking berries. Edible?"},
-    "rusty_sword": {"name": "Rusty Sword", "type": "weapon", "description": "A basic, somewhat rusty sword."},
+    "bandage": {
+        "name": "Bandage",
+        "description": "A simple cloth bandage. Heals a minor wound.",
+        "type": "consumable",
+        "effect": "heal",
+        "amount": 10, "value": 5}, # Added value for consistency
     "leather_armor": {"name": "Leather Armor", "type": "armor", "description": "Simple but effective leather armor."},
     "worn_staff": {"name": "Worn Staff", "type": "weapon", "description": "An old wooden staff, good for channeling energies."},
     "simple_robes": {"name": "Simple Robes", "type": "armor", "description": "Basic robes often worn by apprentices."},
@@ -380,19 +385,19 @@ classes_data = {
         "name": "Warrior", "description": "Masters of melee combat.",
         "base_stats": {"hp": 60, "attack_power": 12},
         "special_moves": {"power_strike": {"name": "Power Strike", "damage_multiplier": 1.5, "cooldown_max": 2, "description": "A strong attack that deals 1.5x damage."}},
-        "starter_items": ["rusty_sword", "leather_armor", "small_pouch_of_coins"] # Map scroll and knife given directly
+        "starter_items": ["leather_armor", "small_pouch_of_coins"] # Removed simple_knife (given directly)
     },
     "mage": {
         "name": "Mage", "description": "Wielders of arcane energies.",
         "base_stats": {"hp": 40, "attack_power": 6, "special_power": 15},
         "special_moves": {"fireball": {"name": "Fireball", "damage": 20, "cooldown_max": 1, "description": "Hurls a flaming sphere."}},
-        "starter_items": ["worn_staff", "simple_robes", "small_pouch_of_coins"] # Map scroll and knife given directly
+        "starter_items": ["simple_robes", "small_pouch_of_coins"] # Removed worn_staff
     },
     "rogue": {
         "name": "Rogue", "description": "Agile and cunning.",
         "base_stats": {"hp": 50, "attack_power": 10},
         "special_moves": {"quick_strike": {"name": "Quick Strike", "damage_multiplier": 1.2, "cooldown_max": 0, "description": "A swift, less powerful attack."}},
-        "starter_items": ["pair_of_daggers", "shadowy_cloak", "small_pouch_of_coins"] # Map scroll and knife given directly
+        "starter_items": ["shadowy_cloak", "small_pouch_of_coins"] # Removed pair_of_daggers
     }
 }
 
