@@ -1177,6 +1177,8 @@ def run_minimal_web_server():
                     creationArea.style.display = 'block'; // Ensure it's visible
                     document.getElementById('game-interface').style.display = 'none'; // Ensure game interface is hidden
                     document.getElementById('settings-button-container').style.display = 'none';
+                    document.getElementById('feature-interactions-panel').style.display = 'none'; // Explicitly hide
+                    document.getElementById('room-items-panel').style.display = 'none'; // Explicitly hide
                     sessionStorage.removeItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
                     sessionStorage.removeItem(SESSION_STORAGE_CHAR_NAME_KEY);
                     gameIsActiveForInput = false;
