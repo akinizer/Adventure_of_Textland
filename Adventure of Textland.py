@@ -1001,7 +1001,7 @@ def run_minimal_web_server():
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Text RPG - Browser Version</title>
-            <style>
+            <style> # pragma: no cover
                 body { font-family: sans-serif; margin: 20px; background-color: #f0f0f0; color: #333; }
                 .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
                 h1 { color: #5a5a5a; }
@@ -1011,6 +1011,11 @@ def run_minimal_web_server():
                     text-align: center;
                     background-color: #e9e9e9;
                     min-height: 20px; /* Ensure a minimum height */
+                }
+                /* Disable text selection */
+                body {
+                    user-select: none; /* Standard */
+                    -webkit-user-select: none; /* Safari */
                 }
                 #settings-button-container { position: fixed; top: 10px; right: 10px; z-index: 1001;}
                 .inventory-slot {
