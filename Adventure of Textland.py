@@ -38,7 +38,14 @@ VENDOR_STALL_VISUAL = """
 """
 
 # --- Game Data ---
-locations = {
+# Initialize as empty dicts; will be populated by load_all_game_data()
+locations = {}
+zone_layouts = {}
+items_data = {}
+species_data = {}
+classes_data = {}
+
+BASE_LOCATIONS_DATA = { # Keep your original structure here for initial load
     # --- Eldoria City ---
     "eldoria_square": {
         "name": "Eldoria Town Square",
@@ -312,7 +319,7 @@ locations = {
     }
 }
 
-zone_layouts = {
+BASE_ZONE_LAYOUTS_DATA = {
     "Eldoria": {
         "title": "Map of Eldoria",
         "grid": [ "           ", "  [M]----[S]", "   |      | ", "   +-----[G]", "           " ],
@@ -325,7 +332,7 @@ zone_layouts = {
     }
 }
 
-items_data = {
+BASE_ITEMS_DATA = {
     "healing_potion": {"name": "Healing Potion", "type": "consumable", "effect": "heal", "amount": 20, "description": "A vial of swirling red liquid. Restores 20 HP."},
     "shiny_coin": {"name": "Shiny Coin", "type": "currency", "description": "A well-polished gold coin."},
     "apple": {"name": "Apple", "type": "food", "description": "A crisp red apple."},
@@ -359,7 +366,7 @@ items_data = {
 }
 
 # --- Species and Class Data ---
-species_data = {
+BASE_SPECIES_DATA = {
     "human": {
         "name": "Human", "description": "Adaptable and versatile.",
         "stat_bonuses": {"hp_bonus": 5, "attack_bonus": 1},
@@ -380,7 +387,7 @@ species_data = {
     }
 }
 
-classes_data = {
+BASE_CLASSES_DATA = {
     "warrior": {
         "name": "Warrior", "description": "Masters of melee combat.",
         "base_stats": {"hp": 60, "attack_power": 12},
@@ -460,6 +467,36 @@ def trace_function_calls(func):
         log_function_call_to_steptracker(func.__name__)
         return func(*args, **kwargs)
     return wrapper
+
+def load_all_game_data():
+    """Loads all game data from their base structures or JSON files."""
+    global locations, zone_layouts, items_data, species_data, classes_data
+    
+    # For now, we're using the in-script dictionaries.
+    # If these were in JSON files, you'd load them here.
+    # Example for JSON loading (if you move them to files later):
+    # locations = load_json_data('locations.json', "Locations")
+    # items_data = load_json_data('items_data.json', "Items")
+    # ... and so on
+
+    locations = BASE_LOCATIONS_DATA.copy() # Use .copy() if you might modify them in-memory later and want to preserve original
+    zone_layouts = BASE_ZONE_LAYOUTS_DATA.copy()
+    items_data = BASE_ITEMS_DATA.copy()
+    species_data = BASE_SPECIES_DATA.copy()
+    classes_data = BASE_CLASSES_DATA.copy()
+
+    print("[Game Data] All game data reloaded.")
+
+    # Post-load validation/checks (optional but recommended)
+    if not locations:
+        print("[ERROR] Locations data is empty after reload!")
+    if not items_data:
+        print("[ERROR] Items data is empty after reload!")
+    # Add more checks as needed
+
+# Initial load of game data when the script starts
+load_all_game_data()
+
 
 web_server_thread = None
 flask_app_instance = None
@@ -991,7 +1028,9 @@ def run_minimal_web_server():
                 let chosenClass = null;
                 let gameIsPaused = false;
                 let gameIsActiveForInput = false; // True when game interface is shown
-                
+                const SESSION_STORAGE_GAME_ACTIVE_KEY = 'textRpgGameSessionActive';
+                const SESSION_STORAGE_CHAR_NAME_KEY = 'textRpgCharacterName';
+
                  // Centralized pause/resume logic
                 function togglePauseGame() {
                     // If modal is visible and related to pause, this call is to resume.
@@ -1105,6 +1144,8 @@ def run_minimal_web_server():
                     creationArea.style.display = 'block'; // Ensure it's visible
                     document.getElementById('game-interface').style.display = 'none'; // Ensure game interface is hidden
                     document.getElementById('settings-button-container').style.display = 'none';
+                    sessionStorage.removeItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
+                    sessionStorage.removeItem(SESSION_STORAGE_CHAR_NAME_KEY);
                     gameIsActiveForInput = false;
                 }
 
@@ -1246,6 +1287,8 @@ def run_minimal_web_server():
                         outputElement.innerHTML = ''; // Clear "creating character" message
                         displaySceneData(initialSceneData, "Character created! Your adventure begins.");
                         document.getElementById('settings-button-container').style.display = 'block';
+                        sessionStorage.setItem(SESSION_STORAGE_GAME_ACTIVE_KEY, 'true');
+                        sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, charName);
                         gameIsActiveForInput = true;
 
                     } catch (error) {
@@ -1300,10 +1343,34 @@ def run_minimal_web_server():
                         outputElement.innerHTML = ''; 
                         displaySceneData(loadedSceneData, `Loaded character: ${characterName}.`);
                         document.getElementById('settings-button-container').style.display = 'block';
+                        sessionStorage.setItem(SESSION_STORAGE_GAME_ACTIVE_KEY, 'true');
+                        sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName);
                         gameIsActiveForInput = true;
                     } catch (error) {
                         outputElement.innerHTML = `<p>Error loading character ${characterName}: ${error}</p>`;
                     }
+                }
+                function goToMainMenu() {
+                    console.trace("goToMainMenu called");
+                    closeModal(); // Close any open modal like settings or pause
+                    sessionStorage.removeItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
+                    sessionStorage.removeItem(SESSION_STORAGE_CHAR_NAME_KEY);
+                    // Optionally, tell the server to clear the active player state if necessary (e.g., via an API call)
+                    showInitialCharacterScreen();
+                }
+                async function attemptResumeSession(characterName) {
+                    // This is very similar to handleLoadCharacter, but assumes server still has the player state
+                    // or can reload it silently.
+                    console.log("Attempting to resume session for:", characterName);
+                    // We'll use a generic action to fetch the current scene for the already active player
+                    // The backend's process_game_action will use the existing global `player` object.
+                    // If the server restarted, this would need more robust handling,
+                    // perhaps by calling /api/load_character if player.name doesn't match.
+                    await performAction('look'); // 'look' is a good way to get current scene data
+                    document.getElementById('character-creation-area').style.display = 'none';
+                    document.getElementById('game-interface').style.display = 'block';
+                    document.getElementById('settings-button-container').style.display = 'block';
+                    gameIsActiveForInput = true;
                 }
 
                 async function performAction(actionString) { 
@@ -1481,6 +1548,41 @@ def run_minimal_web_server():
                 // Initial load
                 window.onload = () => {
                     showInitialCharacterScreen(); // Start with character selection/load screen
+                    const isGameSessionActive = sessionStorage.getItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
+                    const activeCharName = sessionStorage.getItem(SESSION_STORAGE_CHAR_NAME_KEY);
+
+                    if (isGameSessionActive === 'true' && activeCharName) {
+                        // Attempt to resume the game session
+                        // We need to ensure the server-side 'player' object is correctly populated.
+                        // A simple 'look' action might suffice if the server's player state is persistent.
+                        // For robustness, we might need a dedicated "resume_session" API endpoint
+                        // that re-validates/re-loads the character on the server if needed.
+                        // For now, let's assume the server's 'player' object is still valid.
+                        // We'll call a function that effectively reloads the character on the server
+                        // and then displays the game interface.
+                        // This is a simplified approach. A robust solution might involve
+                        // the server checking if player.name matches activeCharName.
+                        console.log(`Found active session for ${activeCharName}. Attempting to resume.`);
+                        // We need to make sure the server's global `player` object is set correctly.
+                        // The simplest way for now is to re-trigger the load character logic,
+                        // but silently, or have a dedicated "get_current_game_state_for_session" endpoint.
+
+                        // Let's try to re-load the character to ensure server state is correct.
+                        // This will also set gameIsActiveForInput = true.
+                        handleLoadCharacter(activeCharName).then(() => {
+                            // If handleLoadCharacter is successful, it will show the game interface.
+                            // If it fails (e.g., character data deleted server-side), it will show an error,
+                            // and the user might need to go back to main menu.
+                            console.log("Session resume attempt finished.");
+                        }).catch(error => {
+                            console.error("Error resuming session by reloading character:", error);
+                            sessionStorage.removeItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
+                            sessionStorage.removeItem(SESSION_STORAGE_CHAR_NAME_KEY);
+                            showInitialCharacterScreen(); // Fallback to main screen
+                        });
+                    } else {
+                        showInitialCharacterScreen(); // Start with character selection/load screen
+                    }
 
                     const settingsButton = document.getElementById('settings-gear-button');
                     if(settingsButton) {
@@ -2096,6 +2198,10 @@ def process_command(full_command_input):
         else:
             print("You can only save your progress in a city.")
         return True # Command processed, show scene again
+    elif command == "!reload_data":
+        print("Attempting to reload game data...")
+        load_all_game_data()
+        return True # Show scene again to reflect any changes
     elif command == "!quit": 
         print(f"\nYou decide to end your adventure here. Farewell!" if player["game_active"] else "\nFarewell!")
         return False
