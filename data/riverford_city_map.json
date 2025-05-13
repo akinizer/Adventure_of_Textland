@@ -1,0 +1,110 @@
+{
+    "city_id": "riverford",
+    "name": "Riverford Detailed Map",
+    "grid_size": {"width": 8, "height": 8},
+    "entry_points": {
+        "from_north_gate": {"x": 3, "y": 0, "facing_direction": "south"}
+    },
+    "cells": [
+        [
+            {"type": "wall_city_edge", "description": "Edge of town."},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "city_gate_north", "description": "North Gate - To Southern Road",
+             "action": {
+                 "type": "exit_to_zone_map",
+                 "target_zone_loc_id": "riverford_city_node"
+                }
+            },
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "building_house_small", "name": "Quiet Cottage"},
+            {"type": "path", "description": "A cobblestone path."},
+            {"type": "path"},
+            {"type": "path", "description": "Path leading south from the gate."},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "building_house_small", "name": "Angler's Shack"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "building_house_small", "name": "Herbalist's Home (locked)"},
+            {"type": "path"},
+            {"type": "town_square_edge", "description": "Edge of the town square."},
+            {"type": "town_square_open", "description": "Riverford Town Square."},
+            {"type": "town_square_spring", "description": "A small, bubbling spring at the center of the square.", "feature_id": "riverford_spring"},
+            {"type": "town_square_open", "npc_id": "concerned_villager", "description": "The concerned villager paces here."},
+            {"type": "town_square_edge"},
+            {"type": "building_house_small", "name": "Empty Stall"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "path"},
+            {"type": "town_square_open"},
+            {"type": "town_square_open"},
+            {"type": "town_square_open"},
+            {"type": "town_square_open"},
+            {"type": "path", "description": "Path leading towards the docks."},
+            {"type": "building_storage", "name": "Dock Storage"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "docks_wooden_plank", "description": "Wooden planks of the docks."},
+            {"type": "docks_edge", "npc_id": "old_fisherman", "description": "The old fisherman mends nets here."}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "building_house_small", "name": "Fisher's Hut"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "docks_wooden_plank"},
+            {"type": "docks_mooring_post", "description": "A sturdy mooring post."},
+            {"type": "water_river_edge", "description": "The edge of the flowing river."}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "docks_wooden_plank"},
+            {"type": "docks_wooden_plank"},
+            {"type": "water_river_edge"},
+            {"type": "water_river_edge"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "docks_end", "description": "End of the docks."},
+            {"type": "water_river_edge"},
+            {"type": "water_river_edge"},
+            {"type": "water_river_edge"}
+        ]
+    ],
+    "legend": {
+        "wall_city_edge": {"symbol": "#", "description": "Edge of Town/Impassable"},
+        "city_gate_north": {"symbol": "N", "description": "North City Gate"},
+        "path": {"symbol": ".", "description": "Path"},
+        "building_house_small": {"symbol": "H", "description": "Small House"},
+        "building_storage": {"symbol": "S", "description": "Storage Shed"},
+        "town_square_edge": {"symbol": "s", "description": "Edge of Town Square"},
+        "town_square_open": {"symbol": "S", "description": "Town Square"},
+        "town_square_spring": {"symbol": "F", "description": "Bubbling Spring"},
+        "docks_wooden_plank": {"symbol": "=", "description": "Wooden Dock Plank"},
+        "docks_edge": {"symbol": "D", "description": "Edge of the Docks"},
+        "docks_mooring_post": {"symbol": "o", "description": "Mooring Post"},
+        "docks_end": {"symbol": "d", "description": "End of the Docks"},
+        "water_river_edge": {"symbol": "~", "description": "River Water"}
+    }
+}

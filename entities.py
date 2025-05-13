@@ -8,6 +8,12 @@ class Player:
         self.class_id = None
 
         self.current_location_id = None
+        # For detailed city maps
+        self.current_map_type = "zone"  # Can be "zone" or "city"
+        self.current_city_id = None     # e.g., "riverford", "eldoria"
+        self.current_city_x = None
+        self.current_city_y = None
+        self.last_zone_location_id = None # To remember the zone map node when entering a city
         self.inventory = []
         self.game_active = False
 

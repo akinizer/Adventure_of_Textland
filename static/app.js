@@ -1002,7 +1002,8 @@ function updateZoneMapSidePanel(zoneMapData) {
 
 function displaySceneData(data, actionStringEcho = null) {
     console.trace("displaySceneData called");
-    console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); // Log the data object
+    // Deep clone for logging to avoid issues if data is modified elsewhere by reference
+    console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); 
     const outputElement = document.getElementById('game-output');
 
     // Call the top-level component update functions
@@ -1024,9 +1025,98 @@ function displaySceneData(data, actionStringEcho = null) {
         updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
         updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
 
-        // --- Component: Zone Map Side Panel ---
-        updateZoneMapSidePanel(data.current_zone_map_data);
+        // --- Conditional Map Display ---
+        const primaryMapDisplayElement = document.getElementById('zone-map-side-panel'); // This is now the single map display area
+
+        if (data.map_type === "city" && data.city_map_data) {
+            if (primaryMapDisplayElement) {
+                renderCityMap(data.city_map_data, data.player_city_x, data.player_city_y); // renderCityMap will now target zone-map-side-panel
+                primaryMapDisplayElement.style.display = 'block';
+            } else {
+                console.error("Primary map display element ('zone-map-side-panel') not found!");
+            }
+        } else { // Default to zone map view or if map_type is "zone"
+            if (primaryMapDisplayElement && data.current_zone_map_data) {
+                updateZoneMapSidePanel(data.current_zone_map_data);
+                primaryMapDisplayElement.style.display = 'block';
+            } else if (primaryMapDisplayElement) {
+                primaryMapDisplayElement.innerHTML = '<p style="text-align:center;">Map data unavailable.</p>'; // Clear or show placeholder
+                primaryMapDisplayElement.style.display = 'block';
+            }
+        }
 }
+
+function renderCityMap(cityMapData, playerCityX, playerCityY) {
+    const mapVisualArea = document.getElementById('zone-map-side-panel'); // Changed target to zone-map-side-panel
+    if (!mapVisualArea) {
+        console.error("HTML element with ID 'zone-map-side-panel' not found for renderCityMap!");
+        return;
+    }
+    if (!cityMapData || !cityMapData.cells || !cityMapData.grid_size) {
+        mapVisualArea.innerHTML = "<p>City map data is incomplete or missing.</p>";
+        mapVisualArea.style.display = 'block'; // Ensure it's visible even for error
+        return;
+    }
+
+    let gridHTML = `<h4 style="margin-bottom: 5px;">${cityMapData.name || 'City Map'}</h4>`;
+    // Enhanced table style for a more "beautiful visual"
+    gridHTML += '<table class="city-grid" style="margin: 10px auto; border-collapse: collapse; font-size: 1.2em; line-height: 1; box-shadow: 0 0 8px rgba(0,0,0,0.2); border: 2px solid #777;">';
+    const cells = cityMapData.cells;
+    const legend = cityMapData.legend || {}; // Ensure legend exists
+    const PLAYER_SYMBOL = '🧍'; // Using a person emoji for the player
+
+    // Define some background colors for cell types (customize these as you like)
+    const cellTypeColors = {
+        "path": "#f0f0f0", // Light gray for paths
+        "wall_city_edge": "#8B4513", // Brown for walls
+        "building_house_large": "#d2b48c", // Tan for large houses
+        "building_house_small": "#deb887", // Lighter tan for small houses
+        "market_main_area": "#90ee90", // Light green for market
+        "market_stall_goods": "#add8e6", // Light blue for goods stalls
+        "market_stall_food": "#ffdab9", // Peach for food stalls
+        "square_main_area": "#e6e6fa", // Lavender for square
+        "square_fountain": "#afeeee", // Pale turquoise for fountain
+        // Add more types and their colors from your eldoria_city_map.json legend
+    };
+
+    for (let y = 0; y < cityMapData.grid_size.height; y++) {
+        gridHTML += '<tr>';
+        for (let x = 0; x < cityMapData.grid_size.width; x++) {
+            const cell = cells[y] && cells[y][x] ? cells[y][x] : { type: 'unknown', description: 'Unknown' }; // Graceful handling of sparse cells
+            const cellTypeData = legend[cell.type] || { symbol: '?', description: 'Unknown Type' }; // Fallback for legend
+            let displaySymbol = cellTypeData.symbol;
+            let cellClass = `map-cell type-${cell.type.replace(/_/g, '-')}`; // CSS-friendly class name
+            let cellBackgroundColor = cellTypeColors[cell.type] || '#ffffff'; // Default to white
+
+            if (x === playerCityX && y === playerCityY) {
+                displaySymbol = PLAYER_SYMBOL;
+                cellClass += ' player-location';
+                cellBackgroundColor = cellTypeColors[cell.type] || '#ffff99'; // Highlight player cell, fallback to light yellow
+            }
+            
+            const tooltip = cell.name ? `${cell.name} (${cell.type}) - ${cell.description}` : `${cell.type} - ${cell.description}`;
+            // Enhanced cell style with background color and slightly more padding for symbols
+            gridHTML += `<td class="${cellClass}" title="${tooltip}" style="width: 1.5em; height: 1.5em; padding: 2px; border: 1px solid #ccc; text-align: center; vertical-align: middle; background-color: ${cellBackgroundColor}; cursor: default;">${displaySymbol}</td>`;
+        }
+        gridHTML += '</tr>';
+    }
+    gridHTML += '</table>';
+
+    // Add legend display
+    // Improved legend styling
+    if (Object.keys(legend).length > 0) {
+        gridHTML += '<div class="city-legend" style="margin-top: 15px; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; font-size: 0.9em; text-align: left; max-width: 350px; margin-left: auto; margin-right: auto;"><strong>Legend:</strong><ul style="list-style-type: none; padding-left: 0; margin-top: 5px;">';
+        for (const type in legend) {
+            const legendItemColor = cellTypeColors[type] || 'transparent';
+            gridHTML += `<li style="margin-bottom: 3px;"><span style="display: inline-block; width: 1.2em; height: 1.2em; text-align:center; margin-right: 5px; border: 1px solid #ccc; background-color: ${legendItemColor}; vertical-align: middle;">${legend[type].symbol}</span> ${legend[type].description}</li>`;
+        }
+        gridHTML += `<li style="margin-bottom: 3px;"><span style="display: inline-block; width: 1.2em; height: 1.2em; text-align:center; margin-right: 5px; border: 1px solid #ccc; background-color: #ffff99; vertical-align: middle;">${PLAYER_SYMBOL}</span> You are here</li></ul></div>`;
+    }
+
+    mapVisualArea.innerHTML = gridHTML;
+    mapVisualArea.style.display = 'block'; // Make sure the area is visible
+}
+
 
 // Initial load
 window.onload = () => {

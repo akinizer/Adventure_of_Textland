@@ -1,62 +1,17 @@
 {
-    "eldoria_square": {
-        "name": "Eldoria Town Square",
+    "eldoria_city_node": {
+        "name": "City of Eldoria",
         "zone": "Eldoria",
         "map_x": 1,
         "map_y": 1,
-        "description": "The bustling heart of Eldoria. A grand fountain stands in the center. Paths lead east to the market and south towards the city gate.",
-        "exits": {"east": "eldoria_market", "south": "eldoria_south_gate"},
-        "items": ["shiny_coin", "healing_potion"],
-        "npcs": {
-            "elder_maeve": {
-                "name": "Elder Maeve",
-                "description": "A wise-looking woman with kind eyes, sitting by the town fountain.",
-                "dialogue": "Hey you there, I am looking for an adventurer. We've had reports of strange creatures in the Whispering Woods. Could you investigate?",
-                "type": "quest_giver",
-                "hostile": false
-            },
-            "guard_thomas": {
-                "name": "Guard Thomas",
-                "description": "A stern-faced guard in polished armor, watching over the square.",
-                "dialogue": "Keep the peace, citizen. If you need help, Elder Maeve is wise, or check the market for goods.",
-                "type": "neutral",
-                "hostile": false
+        "description": "The majestic city of Eldoria stands before you, its gates welcoming travelers. Roads lead south towards the countryside.",
+        "exits": {"south": "southern_road_1"},
+        "city_map_transitions": {
+            "enter": { 
+                "city_id": "eldoria",
+                "entry_point_key": "from_south_gate"
             }
         }
-    },
-    "eldoria_market": {
-        "name": "Eldoria Market",
-        "zone": "Eldoria",
-        "map_x": 2,
-        "map_y": 1,
-        "description": "A vibrant street filled with stalls. Merchants call out, offering various goods. The town square is to the west.",
-        "exits": {"west": "eldoria_square"},
-        "items": ["apple", "bread_loaf"],
-        "npcs": {
-            "merchant_sarah": {
-                "name": "Merchant Sarah",
-                "description": "A cheerful merchant with a wide array of goods on display.",
-                "dialogue": "Welcome to my stall! Finest goods in Eldoria!",
-                "type": "vendor",
-                "hostile": false
-            },
-            "grumpy_old_man": {
-                "name": "Grumpy Old Man",
-                "description": "An old man muttering to himself on a bench, eyeing passersby with suspicion.",
-                "dialogue": "Hmph. Get away from me, you bother.",
-                "type": "dismissive",
-                "hostile": false
-            }
-        }
-    },
-    "eldoria_south_gate": {
-        "name": "Eldoria South Gate",
-        "zone": "Eldoria",
-        "map_x": 1,
-        "map_y": 2,
-        "description": "Massive wooden gates mark the southern exit of Eldoria. A well-worn path leads south into the countryside. The town square is to the north.",
-        "exits": {"north": "eldoria_square", "south": "southern_road_1"},
-        "npcs": {}
     },
     "southern_road_1": {
         "name": "Southern Road - Part 1",
@@ -64,7 +19,7 @@
         "map_x": 1,
         "map_y": 3,
         "description": "You are on a dusty road leading south from Eldoria. Fields stretch to either side. To the east, you spot the dark opening of a cave. The road continues south.",
-        "exits": {"north": "eldoria_south_gate", "south": "southern_road_2", "east": "gloomy_cave_entrance"},
+        "exits": {"north": "eldoria_city_node", "south": "southern_road_2", "east": "gloomy_cave_entrance"},
         "items": [],
         "npcs": {}
     },
@@ -115,50 +70,18 @@
         "description": "The road continues south. In the distance, you can see the town of Riverford nestled by a river. The path north leads back towards Eldoria.",
         "exits": {"north": "southern_road_1", "south": "riverford_north_gate"},
         "items": [],
-        "npcs": {}
-    },
-    "riverford_north_gate": {
-        "name": "Riverford North Gate",
+        "npcs": {}},
+    "riverford_city_node": {
+        "name": "Town of Riverford",
         "zone": "Riverford",
         "map_x": 1,
         "map_y": 5,
-        "description": "You stand at the northern gate of Riverford. The town looks quieter than Eldoria. The main square is to the south.",
-        "exits": {"north": "southern_road_2", "south": "riverford_square"},
-        "npcs": {}
-    },
-    "riverford_square": {
-        "name": "Riverford Town Square",
-        "zone": "Riverford",
-        "map_x": 1,
-        "map_y": 6,
-        "description": "A quaint town square with a small, bubbling spring. A few townsfolk go about their business. The docks are to the east.",
-        "exits": {"north": "riverford_north_gate", "east": "riverford_docks"},
-        "items": [],
-        "npcs": {
-            "concerned_villager": {
-                "name": "Concerned Villager",
-                "description": "A villager who keeps glancing around nervously, clutching a small note.",
-                "dialogue": "Psst, come here stranger. I have urgent news about the goings-on in the MurkWaste Swamp!",
-                "type": "quest_giver_urgent",
-                "hostile": false
-            }
-        }
-    },
-    "riverford_docks": {
-        "name": "Riverford Docks",
-        "zone": "Riverford",
-        "map_x": 2,
-        "map_y": 6,
-        "description": "Wooden planks form a series of docks along the river. Fishing boats are moored here. The town square is to the west.",
-        "exits": {"west": "riverford_square"},
-        "items": ["fishing_net_scraps"],
-        "npcs": {
-            "old_fisherman": {
-                "name": "Old Fisherman",
-                "description": "An old fisherman mending his nets, he doesn't look up from his work.",
-                "dialogue": "Hmph. River's been quiet lately... too quiet.",
-                "type": "dismissive_hint",
-                "hostile": false
+        "description": "The quaint town of Riverford lies before you, its northern gates open. A road leads north out of town.",
+        "exits": {"north": "southern_road_2"},
+        "city_map_transitions": {
+            "enter": {
+                "city_id": "riverford",
+                "entry_point_key": "from_north_gate"
             }
         }
     },
@@ -276,7 +199,7 @@
         "map_x": 0,
         "map_y": 0,
         "description": "This small, stone chamber is cold and damp. A faint light filters in from a crack in the ceiling. There's a worn wooden crate in one corner.",
-        "exits": {"out": "eldoria_square"},
+        "exits": {"out": "eldoria_city_node"},
         "items": [],
         "features": {
             "worn_crate": {

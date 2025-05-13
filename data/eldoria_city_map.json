@@ -1,0 +1,114 @@
+{
+    "city_id": "eldoria",
+    "name": "Eldoria Detailed Map",
+    "grid_size": {"width": 8, "height": 8},
+    "entry_points": {
+        "from_south_gate": {"x": 4, "y": 7, "facing_direction": "north"},
+        "from_market_via_square": {"x": 1, "y": 3, "facing_direction": "east"},
+        "from_square_via_market": {"x": 0, "y": 3, "facing_direction": "west"},
+        "from_starter_area_teleport": {"x": 1, "y": 1}
+    },
+    "cells": [
+        [
+            {"type": "wall_city_edge", "description": "Northern city wall."},
+            {"type": "building_house_large", "name": "Mayor's Residence (Locked)"},
+            {"type": "building_house_large"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "building_library_facade", "name": "Eldoria Library (Closed for renovation)"},
+            {"type": "building_house_large"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "path", "description": "You emerge here, the exit from the Starting Chamber."},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "market_stall_empty", "name": "Empty Stall"},
+            {"type": "market_main_area", "description": "Eldoria Market - West Side", "npc_id": "grumpy_old_man"},
+            {"type": "market_stall_goods", "name": "Sarah's Wares", "npc_id": "merchant_sarah", "action": "trade_merchant_sarah"},
+            {"type": "market_main_area", "description": "Eldoria Market - Center"},
+            {"type": "market_stall_food", "name": "Baker's Stall"},
+            {"type": "market_main_area", "description": "Eldoria Market - East Side"},
+            {"type": "path_to_square", "description": "Path leading to the Town Square."},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "market_exit_west", "description": "Exit from Market to Square", "action": "move_to_cell", "target_cell": {"x": 7, "y": 3}},
+            {"type": "market_main_area"},
+            {"type": "market_main_area"},
+            {"type": "market_main_area"},
+            {"type": "market_main_area"},
+            {"type": "market_main_area"},
+            {"type": "path"},
+            {"type": "square_main_area", "description": "Eldoria Square - East Entrance", "action": "move_to_cell", "target_cell": {"x": 0, "y": 3}}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "square_main_area", "description": "Eldoria Square - North Side", "npc_id": "guard_thomas"},
+            {"type": "square_fountain", "description": "A grand stone fountain, currently dry.", "feature_id": "eldoria_fountain"},
+            {"type": "square_main_area", "description": "Eldoria Square - North-East Side"},
+            {"type": "path"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "building_house_small", "name": "Guard Barracks (Private)"},
+            {"type": "path"},
+            {"type": "square_main_area", "description": "Eldoria Square - West Side"},
+            {"type": "square_main_area", "description": "Eldoria Square - Center", "npc_id": "elder_maeve"},
+            {"type": "square_main_area", "description": "Eldoria Square - East Side"},
+            {"type": "building_house_small", "name": "Town Scribe's Office"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path", "description": "Path leading to the South Gate."},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "path"},
+            {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "city_gate_south", "description": "South Gate - To Southern Road",
+             "action": {
+                 "type": "exit_to_zone_map",
+                 "target_zone_loc_id": "eldoria_city_node"
+                }
+            },
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"},
+            {"type": "wall_city_edge"}
+        ]
+    ],
+    "legend": {
+        "wall_city_edge": {"symbol": "🧱", "description": "City Wall"},
+        "path": {"symbol": "👣", "description": "Path"},
+        "building_house_large": {"symbol": "🏠", "description": "Large House"},
+        "building_house_small": {"symbol": "🏡", "description": "Small House"},
+        "building_library_facade": {"symbol": "🏛️", "description": "Library Facade"},
+        "market_stall_empty": {"symbol": "💨", "description": "Empty Market Stall"},
+        "market_main_area": {"symbol": "🧺", "description": "Market Area"},
+        "market_stall_goods": {"symbol": "🛍️", "description": "Goods Stall"},
+        "market_stall_food": {"symbol": "🥖", "description": "Food Stall"},
+        "path_to_square": {"symbol": "➡️", "description": "Path to Square"},
+        "market_exit_west": {"symbol": "🚪", "description": "Market Exit"},
+        "square_main_area": {"symbol": "🌳", "description": "Town Square"},
+        "square_fountain": {"symbol": "⛲", "description": "Fountain"},
+        "city_gate_south": {"symbol": "⛩️", "description": "South Gate"}
+    }
+}

@@ -51,6 +51,7 @@ STEPTRACKER_FILE = os.path.join(STEPTRACKER_DIR, "function_trace.log")
 locations = {}
 zone_layouts = {}
 items_data = {}
+city_maps_data = {} # To store loaded city map details
 species_data = {}
 classes_data = {}
 
@@ -118,12 +119,19 @@ def _load_json_data_from_file(filename, data_description):
 
 def load_all_game_data():
     """Loads all game data from their base structures or JSON files."""
-    global locations, zone_layouts, items_data, species_data, classes_data
+    global locations, zone_layouts, items_data, species_data, classes_data, city_maps_data # Add city_maps_data
     locations = _load_json_data_from_file("locations.json", "Locations")
     zone_layouts = _load_json_data_from_file("zone_layouts.json", "Zone Layouts")
     items_data = _load_json_data_from_file("items.json", "Items")
     species_data = _load_json_data_from_file("species.json", "Species")
     classes_data = _load_json_data_from_file("classes.json", "Classes")
+
+    # Load city maps
+    city_ids_to_load = ["riverford", "eldoria"] # Define which city maps to attempt to load
+    for city_id in city_ids_to_load:
+        map_details = _load_city_map_data_from_file(city_id)
+        if map_details:
+            city_maps_data[city_id] = map_details
 
     # Convert NPC dictionaries in locations to NPC objects
     for loc_id, loc_data in locations.items():
@@ -155,6 +163,27 @@ def load_all_game_data():
         print("[ERROR] Classes data is empty after reload!")
     if not zone_layouts:
         print("[ERROR] Zone layouts data is empty after reload!")
+
+# --- City Map Data Loading ---
+def _load_city_map_data_from_file(city_id):
+    """Helper function to load data for a specific city map from its JSON file."""
+    filename = f"{city_id}_city_map.json"
+    filepath = os.path.join(DATA_DIR, filename)
+    try:
+        if not os.path.exists(filepath):
+            print(f"[WARNING] City map data file not found: {filepath}. City map for '{city_id}' will not be available.")
+            return None
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            print(f"[Game Data] Successfully loaded city map for '{city_id}' from {filepath}")
+            return data
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Error decoding JSON from city map file {filepath}: {e}. City map for '{city_id}' will not be available.")
+        return None
+    except Exception as e:
+        print(f"[ERROR] An unexpected error occurred while loading city map {filepath}: {e}. City map for '{city_id}' will not be available.")
+        return None
+
 
 # Initial load of game data when the script starts
 load_all_game_data()
@@ -553,9 +582,33 @@ def handle_environmental_interaction(feature_id, action_verb):
             feature["closed"] = False
             player.flags["found_starter_items"] = True # Still set this flag
             if player.current_location_id == "generic_start_room":
-                print("\nThe way out of the chamber seems clear now. You step outside.")
-                player.move_to("eldoria_square") # Move to the defined exit
-                log_game_event("auto_move", {"from": "generic_start_room", "to": "eldoria_square", "reason": "opened_starter_crate_terminal", "player_name": player.name})
+                start_room_data = locations.get("generic_start_room", {})
+                exit_destination_id = start_room_data.get("exits", {}).get("out") # Should be "eldoria_city_node"
+
+                if exit_destination_id == "eldoria_city_node":
+                    # Transition directly into Eldoria's detailed city map
+                    eldoria_city_map_details = city_maps_data.get("eldoria")
+                    # Define the specific coordinates from the starter area exit
+                    target_city_x = 1 
+                    target_city_y = 1
+                    
+                    if eldoria_city_map_details:
+                        print("\nThe way out of the chamber seems clear now. You step outside and find yourself within the city of Eldoria.")
+                        player.last_zone_location_id = exit_destination_id # Store "eldoria_city_node"
+                        player.current_map_type = "city"
+                        player.current_city_id = "eldoria"
+                        player.current_city_x = target_city_x
+                        player.current_city_y = target_city_y
+                        player.current_location_id = exit_destination_id # Keep context of the zone map node
+                        log_game_event("auto_move_to_city_map", {"from": "generic_start_room", "to_city": "eldoria", "coords": f"({target_city_x},{target_city_y})", "reason": "opened_starter_crate_terminal", "player_name": player.name})
+                    # else: # Fallback if eldoria_city_map.json wasn't loaded
+                    #     print(f"[ERROR] Eldoria city map data not found. Moving to {exit_destination_id} on zone map instead.")
+                    #     player.move_to(exit_destination_id)
+                elif exit_destination_id: # If it's a different exit, do a normal zone move
+                    print("\nThe way out of the chamber seems clear now. You step outside.")
+                    player.move_to(exit_destination_id)
+                    log_game_event("auto_move", {"from": "generic_start_room", "to": exit_destination_id, "reason": "opened_starter_crate_terminal", "player_name": player.name})
+
     elif chosen_outcome.get("type") == "stat_change" and chosen_outcome.get("stat") == "hp":
         player.heal(chosen_outcome.get("amount", 0)) # Use method
         print(f"Your HP is now {player.hp}/{player.max_hp}.")
@@ -658,23 +711,157 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             else:
                 game_response["message"] = "Current location is unknown."
         elif action.startswith('go '):
-            direction = action.split(' ', 1)[1] 
-            current_loc_id = player.current_location_id
-            current_location_data = locations.get(current_loc_id, {})
+            direction = action.split(' ', 1)[1].lower() # Ensure direction is lowercase
+
+            if player.current_map_type == "city":
+                # --- City Map Movement ---
+                current_city_map = city_maps_data.get(player.current_city_id)
+                if not current_city_map:
+                    game_response["message"] = "[ERROR] Current city map data is missing. Cannot move."
+                    # location_name and description will be set by the final population logic
+                else:
+                    grid_width = current_city_map["grid_size"]["width"]
+                    grid_height = current_city_map["grid_size"]["height"]
+                    
+                    new_x, new_y = player.current_city_x, player.current_city_y
+
+                    if direction == "north": new_y -= 1
+                    elif direction == "south": new_y += 1
+                    elif direction == "east": new_x += 1
+                    elif direction == "west": new_x -= 1
+                    else:
+                        game_response["message"] = f"Unknown direction: {direction}"
+                        # No change in location, location_name/description will be set by final population
+                    
+                    if 0 <= new_x < grid_width and 0 <= new_y < grid_height:
+                        target_cell_data = current_city_map["cells"][new_y][new_x]
+                        # Define impassable types based on your eldoria_city_map.json
+                        impassable_types = ["wall_city_edge", "building_house_large", "building_house_small", 
+                                            "building_library_facade", "square_fountain"] # Add more as needed
+                        if target_cell_data.get("impassable") or target_cell_data.get("type") in impassable_types:
+                            game_response["message"] = f"You can't go {direction}. {target_cell_data.get('description', 'Something blocks your way.')}"
+                        else:
+                            player.current_city_x = new_x
+                            player.current_city_y = new_y
+                            game_response["message"] = f"You move {direction}."
+                            
+                            # Handle cell-specific actions (like exiting the city)
+                            cell_action = target_cell_data.get("action")
+                            if cell_action:
+                                if isinstance(cell_action, dict) and cell_action.get("type") == "exit_to_zone_map" and "target_zone_loc_id" in cell_action:
+                                    target_zone_loc = cell_action["target_zone_loc_id"]
+                                    game_response["message"] += f" You exit {current_city_map.get('name', player.current_city_id.capitalize())}."
+                                    player.current_map_type = "zone"
+                                    player.current_location_id = target_zone_loc # This is the zone map node
+                                    player.visited_locations.add(target_zone_loc) 
+                                    # location_name/description will be set by final population
+                                elif isinstance(cell_action, dict) and cell_action.get("type") == "move_to_cell" and "target_cell" in cell_action:
+                                    player.current_city_x = cell_action["target_cell"]["x"]
+                                    player.current_city_y = cell_action["target_cell"]["y"]
+                                    game_response["message"] += f" You are quickly ushered to another part of the area..."
+                            
+                            # If still in city, location_name/description will be set by final population
+                    else:
+                        game_response["message"] = f"You can't go {direction}. You've reached the edge of this area."
+                        # No change in location, location_name/description will be set by final population
             
-            if direction in current_location_data.get("exits", {}):
-                player.move_to(current_location_data["exits"][direction])
-                new_loc_id = player.current_location_id # Get the new location ID after moving
-                new_location_data = locations.get(new_loc_id, {})
-                game_response["message"] = f"You walk {direction}."
-                game_response["location_name"] = new_location_data.get("name", "Unknown Area")
-                game_response["description"] = new_location_data.get("description", "An unfamiliar place.")
+            elif player.current_map_type == "zone": # Or default to zone movement
+                # --- Zone Map Movement (Modified Existing Logic) ---
+                current_loc_id = player.current_location_id # This is the zone map location ID
+                current_location_data = locations.get(current_loc_id, {})
+                
+                if direction in current_location_data.get("exits", {}):
+                    destination_loc_id = current_location_data["exits"][direction]
+                    
+                    # Check if moving to a city node that should trigger city map entry
+                    destination_loc_data = locations.get(destination_loc_id, {})
+                    city_id_for_destination = destination_loc_data.get("zone") # e.g., "eldoria"
+                    city_map_transition_info = destination_loc_data.get("city_map_transitions", {}).get("enter")
+
+                    if city_map_transition_info and \
+                       city_id_for_destination == city_map_transition_info.get("city_id") and \
+                       city_id_for_destination in city_maps_data:
+                        
+                        city_map_details = city_maps_data.get(city_id_for_destination)
+                        entry_point_key = city_map_transition_info.get("entry_point_key")
+                        entry_coords = city_map_details.get("entry_points", {}).get(entry_point_key)
+
+                        if entry_coords:
+                            player.last_zone_location_id = destination_loc_id 
+                            player.current_map_type = "city"
+                            player.current_city_id = city_id_for_destination
+                            player.current_city_x = entry_coords["x"]
+                            player.current_city_y = entry_coords["y"]
+                            player.current_location_id = destination_loc_id # Keep zone context
+                            game_response["message"] = f"You walk {direction} and enter {city_map_details.get('name', city_id_for_destination.capitalize())}."
+                        else: 
+                            player.move_to(destination_loc_id) 
+                            game_response["message"] = f"You walk {direction}."
+                    else: 
+                        player.move_to(destination_loc_id) 
+                        game_response["message"] = f"You walk {direction}."
+                else:
+                    game_response["message"] = f"You can't go {direction} from here."
+                    game_response["player_current_location_id"] = player.current_location_id 
+            else: 
+                game_response["message"] = "Error: Unknown map type for movement."
+            # Note: game_response["location_name"] and game_response["description"] will be
+            # populated by the final assembly logic based on the new player state.
+        elif action == "exit city" and player.current_map_type == "city":
+            current_city_map = city_maps_data.get(player.current_city_id)
+            if current_city_map:
+                px, py = player.current_city_x, player.current_city_y
+                if 0 <= py < len(current_city_map.get("cells", [])) and \
+                0 <= px < len(current_city_map.get("cells", [])[py]):
+                    current_cell_data = current_city_map["cells"][py][px]
+                    cell_action_details = current_cell_data.get("action")
+                    if isinstance(cell_action_details, dict) and cell_action_details.get("type") == "exit_to_zone_map":
+                        target_zone_loc = cell_action_details.get("target_zone_loc_id")
+                        if target_zone_loc:
+                            game_response["message"] = f"You exit {current_city_map.get('name', player.current_city_id.capitalize())}."
+                            player.current_map_type = "zone"
+                            player.current_location_id = target_zone_loc
+                            player.visited_locations.add(target_zone_loc)
+                            # Potentially update player.last_zone_location_id if needed for re-entry context
+                            # player.last_zone_location_id = player.current_location_id # Or the city node itself
+                        else:
+                            game_response["message"] = "This exit seems to lead nowhere specific."
+                    else:
+                        game_response["message"] = "You can't exit the city from here."
+                else:
+                    game_response["message"] = "Error: Player is at an invalid position in the city."
             else:
-                game_response["message"] = f"You can't go {direction} from here."
-                game_response["location_name"] = current_location_data.get("name", "Unknown Area")
-                game_response["description"] = current_location_data.get("description", "An unfamiliar place.")
-                # Ensure player_current_location_id is sent back for dead end detection
-                game_response["player_current_location_id"] = player.current_location_id
+                game_response["message"] = "Error: City data not found."
+
+        elif action == "enter city": # New block for "enter city" command
+            if player.current_map_type == "zone":
+                current_loc_id = player.current_location_id
+                current_location_data = locations.get(current_loc_id, {})
+
+                if "city_map_transitions" in current_location_data and \
+                   "enter" in current_location_data["city_map_transitions"]:
+                    
+                    transition_info = current_location_data["city_map_transitions"]["enter"]
+                    city_id_to_enter = transition_info.get("city_id")
+                    entry_point_key = transition_info.get("entry_point_key")
+                    city_map_details = city_maps_data.get(city_id_to_enter)
+
+                    if city_map_details and entry_point_key and entry_point_key in city_map_details.get("entry_points", {}):
+                        entry_coords = city_map_details["entry_points"][entry_point_key]
+                        player.last_zone_location_id = current_loc_id # Store where we entered from
+                        player.current_map_type = "city"
+                        player.current_city_id = city_id_to_enter
+                        player.current_city_x = entry_coords["x"]
+                        player.current_city_y = entry_coords["y"]
+                        # player.current_location_id remains the zone node for context
+                        game_response["message"] = f"You step through the gate and enter {city_map_details.get('name', city_id_to_enter.capitalize())}."
+                        log_game_event("enter_city_map_via_command", {"from_zone_loc": current_loc_id, "to_city": city_id_to_enter, "coords": f"({entry_coords['x']},{entry_coords['y']})", "player_name": player.name})
+                    else:
+                        game_response["message"] = f"You are at an entrance, but the detailed map for {city_id_to_enter.capitalize()} seems inaccessible or misconfigured from here."
+                else:
+                    game_response["message"] = "You are not at a recognized city entrance, or there's no clear way to 'enter city' from here."
+            else: # Already in a city
+                game_response["message"] = "You are already inside a city."
 
         elif action == 'inventory':
             # Ensure inventory key exists
@@ -746,9 +933,41 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 crate["closed"] = False
                 player.flags["found_starter_items"] = True
                 if player.current_location_id == "generic_start_room":
-                    player.move_to("eldoria_square") # Move to the defined exit
-                    game_response["message"] += "\nThe way out of the chamber seems clear now. You step outside."
-                    log_game_event("auto_move", {"from": "generic_start_room", "to": "eldoria_square", "reason": "opened_starter_crate_web", "player_name": player.name})
+                    start_room_data_web = locations.get("generic_start_room", {})
+                    exit_destination_id_web = start_room_data_web.get("exits", {}).get("out") # Should be "eldoria_city_node"
+
+                    if exit_destination_id_web == "eldoria_city_node":
+                        eldoria_city_map_details_web = city_maps_data.get("eldoria")
+                        target_city_x_web = 1
+                        target_city_y_web = 1
+                        if eldoria_city_map_details_web:
+                            game_response["message"] += "\nThe way out of the chamber seems clear now. You step outside and find yourself within the city of Eldoria."
+                            player.last_zone_location_id = exit_destination_id_web
+                            player.current_map_type = "city"
+                            player.current_city_id = "eldoria"
+                            player.current_city_x = target_city_x_web
+                            player.current_city_y = target_city_y_web
+                            player.current_location_id = exit_destination_id_web # Keep zone context
+                            log_game_event("auto_move_to_city_map", {"from": "generic_start_room", "to_city": "eldoria", "coords": f"({target_city_x_web},{target_city_y_web})", "reason": "opened_starter_crate_web", "player_name": player.name})
+                            
+                            # Enhanced server-side console log for scene data after teleport
+                            log_msg_parts = [
+                                f"current_location_id: {player.current_location_id}",
+                                f"map_type: {player.current_map_type}",
+                                f"city_id: {player.current_city_id}",
+                                f"city_coords: ({player.current_city_x},{player.current_city_y})"
+                            ]
+                            city_cell_desc = "N/A"
+                            if eldoria_city_map_details_web: # Already checked this is not None
+                                city_cell_desc = eldoria_city_map_details_web["cells"][player.current_city_y][player.current_city_x].get("description", "N/A")
+                            log_msg_parts.append(f"city_cell_description: '{city_cell_desc}'")
+                            print(f"[SERVER_LOG] Player teleported from starter. {', '.join(log_msg_parts)}")
+                            
+                            # The frontend will need to handle the map_type change in the response
+                    # else: # Fallback for web if not eldoria_city_node
+                    #     player.move_to(exit_destination_id_web) # Normal zone move
+                    #     game_response["message"] += "\nThe way out of the chamber seems clear now. You step outside."
+                    #     log_game_event("auto_move", {"from": "generic_start_room", "to": exit_destination_id_web, "reason": "opened_starter_crate_web", "player_name": player.name})
             else:
                 game_response["message"] = "The crate is already open and empty."
         elif action.startswith('unequip '):
@@ -940,6 +1159,61 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
         # Determine if saving is allowed
         current_zone_for_save = current_location_data_for_response.get("zone")
         game_response["can_save_in_city"] = current_zone_for_save in CITY_ZONES
+
+        # --- Populate map_type and city-specific details AFTER action processing ---
+        game_response["map_type"] = player.current_map_type
+        if player.current_map_type == "city":
+            current_city_map = city_maps_data.get(player.current_city_id)
+            game_response["city_map_data"] = current_city_map
+            game_response["player_city_x"] = player.current_city_x
+            game_response["player_city_y"] = player.current_city_y
+            
+            if current_city_map:
+                # Only override if the action itself didn't set a more specific location_name/description
+                if game_response.get("location_name") == "Unknown Area" or not game_response.get("location_name"):
+                    game_response["location_name"] = current_city_map.get("name", player.current_city_id.capitalize())
+                if game_response.get("description") == "An unfamiliar place." or not game_response.get("description"):
+                    if 0 <= player.current_city_y < len(current_city_map.get("cells", [])) and \
+                       0 <= player.current_city_x < len(current_city_map.get("cells", [])[player.current_city_y]):
+                        current_cell_data = current_city_map["cells"][player.current_city_y][player.current_city_x]
+                        game_response["description"] = current_cell_data.get("description", "An unremarkable part of the city.")
+                        # Check if the current cell is a city exit gate
+                        cell_action_details = current_cell_data.get("action")
+                        if isinstance(cell_action_details, dict) and cell_action_details.get("type") == "exit_to_zone_map":
+                            if "exit city" not in game_response.get("available_actions", []):
+                                game_response.setdefault("available_actions", []).append("exit city")
+                    else:
+                        game_response["description"] = "You are at an unknown spot in the city." # Fallback
+            
+            # Determine available_exits (directions) for city map
+            game_response["available_exits"] = [] # Reset for city context
+            if current_city_map:
+                px, py = player.current_city_x, player.current_city_y
+                grid_width = current_city_map["grid_size"]["width"]
+                grid_height = current_city_map["grid_size"]["height"]
+                # This list should be consistent with the one in the 'go' action for city movement
+                impassable_types_for_buttons = ["wall_city_edge", "building_house_large", "building_house_small", 
+                                                "building_library_facade", "square_fountain"] # Keep this updated
+
+                # Check North
+                if py - 1 >= 0 and not (current_city_map["cells"][py - 1][px].get("impassable") or current_city_map["cells"][py - 1][px].get("type") in impassable_types_for_buttons):
+                    game_response["available_exits"].append("north")
+                # Check South
+                if py + 1 < grid_height and not (current_city_map["cells"][py + 1][px].get("impassable") or current_city_map["cells"][py + 1][px].get("type") in impassable_types_for_buttons):
+                    game_response["available_exits"].append("south")
+                # Check East
+                if px + 1 < grid_width and not (current_city_map["cells"][py][px + 1].get("impassable") or current_city_map["cells"][py][px + 1].get("type") in impassable_types_for_buttons):
+                    game_response["available_exits"].append("east")
+                # Check West
+                if px - 1 >= 0 and not (current_city_map["cells"][py][px - 1].get("impassable") or current_city_map["cells"][py][px - 1].get("type") in impassable_types_for_buttons):
+                    game_response["available_exits"].append("west")
+        
+        # Ensure current_zone_map_data is always populated for the side panel (it was already here, just confirming its placement is fine)
+        # game_response["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations) # This is already populated earlier
+        else: # map_type is "zone" or other
+            # Populate available_exits from zone map location data (this was done earlier, ensure it's not overwritten if not city)
+            if not game_response.get("available_exits"): # If not already set by city logic
+                 game_response["available_exits"] = list(current_location_data_for_response.get("exits", {}).keys())
 
         return jsonify(game_response)
 
@@ -1279,6 +1553,32 @@ def show_current_scene():
         print("\n(Type the number of your choice, or 'leave' to end conversation)")
         return
 
+    if player.current_map_type == "city":
+        city_id = player.current_city_id
+        city_map = city_maps_data.get(city_id)
+        if not city_map:
+            print(f"[ERROR] City map data for '{city_id}' not found. Returning to zone map.")
+            player.current_map_type = "zone"
+            # player.current_location_id should still be set to the city's zone map node
+            # Fall through to zone map display
+        else:
+            px, py = player.current_city_x, player.current_city_y
+            cell_data = city_map["cells"][py][px]
+            city_name = city_map.get("name", city_id.capitalize())
+            
+            print(f"\n--- {city_name} ({cell_data.get('name', cell_data.get('type', 'Unknown Area'))}) (HP: {player.hp}/{player.max_hp}) ---")
+            print(f"    Location: ({px},{py})")
+            print(cell_data.get("description", "You see an unremarkable part of the city."))
+
+            # TODO: Display NPCs at this cell, items, features, available city exits/actions
+            print("\nCity Commands:")
+            print("  look           - Describe your current spot in the city.")
+            print("  go <direction> - Attempt to move within the city.")
+            print("  exit city      - Leave the city and return to the zone map.") # Add exit command
+            # Add other city-specific commands like "enter <building>", "exit city" (if on a gate)
+            return # End here for city view
+
+    # --- Zone Map Display (existing logic) ---
     if player.combat_target_id:
         npc_id = player.combat_target_id
         if npc_id not in locations[player.current_location_id]["npcs"]:
@@ -1368,6 +1668,11 @@ def show_current_scene():
     if location_data.get("exits"):
         print(f"    (Available exits: {', '.join(location_data['exits'].keys())})")
     if room_items: print(f"  take <item>")
+
+    # Add 'enter city' command if the current location is a city node with a defined transition
+    if "city_map_transitions" in location_data and "enter" in location_data["city_map_transitions"]:
+        city_id_to_enter = location_data["city_map_transitions"]["enter"].get("city_id", "the city")
+        print(f"  enter city     - Enter the detailed map for {city_id_to_enter.capitalize()}.")
     
     inv_status = "(empty)" if not player.inventory else f"({len(player.inventory)} item(s))"
     print(f"  inventory (i)  - Check your inventory {inv_status}.")
@@ -1478,49 +1783,68 @@ def draw_zone_map(current_loc_id, all_locs_data): # Ensure all_locs_data is used
     if not current_zone_name:
         print("This area is uncharted (no zone data).")
         return
-
-    zone_locations = []
-    min_x, max_x, min_y, max_y = float('inf'), float('-inf'), float('inf'), float('-inf')
-
-    for loc_id, loc_data in all_locs_data.items():
-        if loc_data.get("zone") == current_zone_name and "map_x" in loc_data and "map_y" in loc_data:
-            x, y = loc_data["map_x"], loc_data["map_y"]
-            zone_locations.append({
-                "id": loc_id, "name": loc_data.get("name", loc_id),
-                "x": x, "y": y,
-                "visited": loc_id in player.visited_locations
-            })
-            min_x, max_x = min(min_x, x), max(max_x, x)
-            min_y, max_y = min(min_y, y), max(max_y, y)
-
-    if not zone_locations:
-        print(f"No locations with map coordinates found in zone: {current_zone_name}")
-        return
-
-    # Create a grid for the map
-    grid_width = max_x - min_x + 1
-    grid_height = max_y - min_y + 1
-    # Initialize grid with a placeholder for empty space (e.g., a period)
-    grid = [['.' for _ in range(grid_width)] for _ in range(grid_height)]
-
-    # Populate the grid
-    for loc in zone_locations:
-        # Adjust coordinates to be 0-indexed for the grid
-        grid_x, grid_y = loc["x"] - min_x, loc["y"] - min_y
-        if loc["id"] == current_loc_id:
-            grid[grid_y][grid_x] = '@'  # Current location
-        elif loc["visited"]:
-            grid[grid_y][grid_x] = 'V'  # Visited
-        else:
-            grid[grid_y][grid_x] = '?'  # Known but not visited (or unvisited)
-
-    # Print the map
-    print(f"\n--- Map of {current_zone_name} ---")
-    for row in grid:
-        print(" ".join(row))
     
-    print("\nLegend: @ Current, V Visited, ? Known, . Empty")
-    print(f"Current Zone: {current_zone_name}")
+    # Attempt to use predefined layout from zone_layouts.json
+    if current_zone_name in zone_layouts:
+        layout = zone_layouts[current_zone_name]
+        print(f"\n--- {layout.get('title', f'Map of {current_zone_name}')} ---")
+        
+        # Create a mutable copy of the grid for placing the player marker
+        display_grid = [list(row_str) for row_str in layout["grid"]]
+        
+        # Find the player's character in the mapping and replace it on the grid
+        # This assumes the mapping characters are unique on the grid where they represent locations
+        for r_idx, row_list in enumerate(display_grid):
+            for c_idx, char_in_grid in enumerate(row_list):
+                if char_in_grid in layout["mapping"]:
+                    mapped_loc_id = layout["mapping"][char_in_grid]
+                    if mapped_loc_id == current_loc_id:
+                        # Check if the character is enclosed in brackets like [S]
+                        # If so, replace the character inside the brackets
+                        if c_idx > 0 and c_idx < len(row_list) - 1 and \
+                           display_grid[r_idx][c_idx-1] == '[' and \
+                           display_grid[r_idx][c_idx+1] == ']':
+                            display_grid[r_idx][c_idx] = '@'
+                        # else: # If not bracketed, replace the char itself (less common for these layouts)
+                        #     display_grid[r_idx][c_idx] = '@' 
+                            
+        for row_list in display_grid:
+            print("".join(row_list))
+        
+        print("\nLegend: @ - You are here. Other symbols represent locations as per map.")
+
+    else: # Fallback to dynamic grid generation if no predefined layout
+        print(f"\n--- Dynamically Generated Map of {current_zone_name} ---")
+        zone_locations = []
+        min_x, max_x, min_y, max_y = float('inf'), float('-inf'), float('inf'), float('-inf')
+
+        for loc_id, loc_data in all_locs_data.items():
+            if loc_data.get("zone") == current_zone_name and "map_x" in loc_data and "map_y" in loc_data:
+                x, y = loc_data["map_x"], loc_data["map_y"]
+                zone_locations.append({
+                    "id": loc_id, "name": loc_data.get("name", loc_id),
+                    "x": x, "y": y,
+                    "visited": loc_id in player.visited_locations
+                })
+                min_x, max_x = min(min_x, x), max(max_x, x)
+                min_y, max_y = min(min_y, y), max(max_y, y)
+
+        if not zone_locations:
+            print(f"No locations with map coordinates found in zone: {current_zone_name}")
+            # Exits will still be printed below
+        else:
+            grid_width = max_x - min_x + 1
+            grid_height = max_y - min_y + 1
+            grid = [['.' for _ in range(grid_width)] for _ in range(grid_height)]
+
+            for loc in zone_locations:
+                grid_x, grid_y = loc["x"] - min_x, loc["y"] - min_y
+                if loc["id"] == current_loc_id: grid[grid_y][grid_x] = '@'
+                elif loc["visited"]: grid[grid_y][grid_x] = 'V'
+                else: grid[grid_y][grid_x] = '?'
+            
+            for row in grid: print(" ".join(row))
+            print("\nLegend: @ Current, V Visited, ? Known, . Empty")
 
     # Display available exits from the current location
     current_exits = current_location_data.get("exits")
@@ -1707,18 +2031,114 @@ def process_command(full_command_input):
         if command == "view":
             print("You unfurl the map scroll...")
 
-        map_lines_for_terminal = draw_zone_map(loc_id)
-        for line in map_lines_for_terminal:
-            print(line)
+        draw_zone_map(player.current_location_id, locations) # Call draw_zone_map directly
     elif command == "look": print("\nYou take a closer look around...")
     elif command == "go":
         if not args: print("Go where? (Specify a direction like 'go north')")
         else:
             direction = args[0]
-            if direction in location_data.get("exits", {}):
-                player.move_to(location_data["exits"][direction])
-                print(f"You walk {direction}.")
-            else: print(f"You can't go {direction} from here.")
+            if player.current_map_type == "zone":
+                if direction in location_data.get("exits", {}):
+                    destination_loc_id = location_data["exits"][direction]
+                    destination_loc_data = locations.get(destination_loc_id, {})
+                    city_id_for_destination = destination_loc_data.get("zone") # Assuming city_id matches zone name for now
+
+                    # Check if this destination is an entry to a city with a detailed map
+                    if city_id_for_destination and city_id_for_destination in city_maps_data:
+                        # Attempt to transition to city map
+                        # We need a way to map the zone location ID (e.g., "riverford_north_gate")
+                        # to the correct entry point key in the city map (e.g., "from_north_gate")
+                        # For now, let's assume a direct mapping or a convention.
+                        # Example: if current_loc_id is "riverford_north_gate" and direction is "south"
+                        # leading to "riverford_square", and "riverford" is the city_id.
+                        
+                        # Simplified entry point key for this example:
+                        # This needs to be more robust, e.g., based on the specific gate ID or a property in locations.json
+                        entry_point_key = f"from_{loc_id.replace(f'{city_id_for_destination}_', '')}" # e.g. "from_north_gate"
+                        if loc_id == "riverford_north_gate" and direction == "south": # Specific condition for Riverford entry
+                            entry_point_key = "from_north_gate"
+                        elif loc_id == "eldoria_south_gate" and direction == "south": # Specific condition for Eldoria entry
+                             entry_point_key = "from_south_gate"
+                        # Add more specific entry conditions as needed or design a better mapping
+
+                        city_map_details = city_maps_data.get(city_id_for_destination)
+                        entry_coords = city_map_details.get("entry_points", {}).get(entry_point_key)
+
+                        if entry_coords:
+                            player.current_map_type = "city"
+                            player.current_city_id = city_id_for_destination
+                            player.current_city_x = entry_coords["x"]
+                            player.current_city_y = entry_coords["y"]
+                            player.current_location_id = destination_loc_id # Keep track of the zone map "parent" location
+                            print(f"You enter the bustling city of {city_map_details.get('name', city_id_for_destination.capitalize())}.")
+                        else: # No valid entry point defined for this way of entering
+                            player.move_to(destination_loc_id)
+                            print(f"You walk {direction}.")
+                    else: # Not a city with a detailed map, or not entering it
+                        player.move_to(destination_loc_id)
+                        print(f"You walk {direction}.")
+                else: print(f"You can't go {direction} from here.")
+            elif player.current_map_type == "city":
+                current_city_map = city_maps_data.get(player.current_city_id)
+                if not current_city_map:
+                    print("[ERROR] Current city map data is missing. Cannot move.")
+                    return True # Or handle error more gracefully
+
+                grid_width = current_city_map["grid_size"]["width"]
+                grid_height = current_city_map["grid_size"]["height"]
+                
+                new_x, new_y = player.current_city_x, player.current_city_y
+
+                if direction == "north": new_y -= 1
+                elif direction == "south": new_y += 1
+                elif direction == "east": new_x += 1
+                elif direction == "west": new_x -= 1
+                else:
+                    print(f"Unknown direction: {direction}")
+                    return True
+
+                # Boundary checks
+                if 0 <= new_x < grid_width and 0 <= new_y < grid_height:
+                    target_cell_data = current_city_map["cells"][new_y][new_x]
+                    if target_cell_data.get("impassable") or target_cell_data.get("type") in ["wall_city_edge", "water_river_edge"]: # Add more impassable types as needed
+                        print(f"You can't go {direction}. Something blocks your way ({target_cell_data.get('description', 'an obstacle')}).")
+                    else:
+                        player.current_city_x = new_x
+                        player.current_city_y = new_y
+                        print(f"You move {direction}.")
+                        # Handle automatic actions on entering a cell, like 'move_to_cell'
+                        cell_action = target_cell_data.get("action")
+                        if cell_action and cell_action.get("type") == "move_to_cell" and "target_cell" in cell_action:
+                            player.current_city_x = cell_action["target_cell"]["x"]
+                            player.current_city_y = cell_action["target_cell"]["y"]
+                            print(f"You are quickly ushered to another part of the area...") # Or a more specific message
+                else:
+                    print(f"You can't go {direction}. You've reached the edge of this area.")
+    elif command == "enter" and " ".join(args) == "city":
+        if player.current_map_type == "zone":
+            current_loc_id = player.current_location_id
+            current_location_data = locations.get(current_loc_id, {})
+
+            if "city_map_transitions" in current_location_data and \
+               "enter" in current_location_data["city_map_transitions"]:
+                
+                transition_info = current_location_data["city_map_transitions"]["enter"]
+                city_id_to_enter = transition_info.get("city_id")
+                entry_point_key = transition_info.get("entry_point_key")
+                city_map_details = city_maps_data.get(city_id_to_enter)
+
+                if city_map_details and entry_point_key and entry_point_key in city_map_details.get("entry_points", {}):
+                    entry_coords = city_map_details["entry_points"][entry_point_key]
+                    player.last_zone_location_id = current_loc_id # Store where we entered from
+                    player.current_map_type = "city"
+                    player.current_city_id = city_id_to_enter
+                    player.current_city_x = entry_coords["x"]
+                    player.current_city_y = entry_coords["y"]
+                    print(f"You step through the gate and enter the detailed map of {city_map_details.get('name', city_id_to_enter.capitalize())}.")
+                else:
+                    print(f"You are at a city entrance, but the detailed map data for {city_id_to_enter.capitalize()} is missing or misconfigured.")
+            else: print("You are not at a recognized city entrance.")
+        else: print("You are already inside a city.")
     elif command == "open" and " ".join(args) == "worn crate": # Specific for starter task
         if player.current_location_id == "generic_start_room":
             crate = locations["generic_start_room"]["features"]["worn_crate"]
@@ -1837,6 +2257,16 @@ def process_command(full_command_input):
                 print(f"There is no one named '{npc_name_input}' here to talk to.")
     else:
         potential_verb = command
+        
+        # Check for 'exit city' command specifically
+        if command == "exit" and " ".join(args) == "city":
+             if player.current_map_type == "city":
+                 print(f"You leave {city_maps_data.get(player.current_city_id, {}).get('name', 'the city')} and return to the zone map.")
+                 player.current_map_type = "zone"
+                 # player.current_location_id is already set to the zone map entry point
+             else: print("You are not currently inside a city.")
+             return True # Command processed
+
         potential_target = " ".join(args)
         target_feature_id = None
         for f_id in location_data.get("features", {}).keys():
