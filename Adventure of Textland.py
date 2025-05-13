@@ -672,6 +672,9 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 game_response["message"] = f"You can't go {direction} from here."
                 game_response["location_name"] = current_location_data.get("name", "Unknown Area")
                 game_response["description"] = current_location_data.get("description", "An unfamiliar place.")
+                # Ensure player_current_location_id is sent back for dead end detection
+                game_response["player_current_location_id"] = player.current_location_id
+
         elif action == 'inventory':
             # Ensure inventory key exists
             player_inventory = player.inventory
@@ -888,6 +891,10 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             for item_id in room_items_for_response
         ]
         
+        # Ensure it's also present if the action was a 'go' action, even if successful,
+        # though it's most critical for failed 'go' actions handled earlier.
+        game_response["player_current_location_id"] = player.current_location_id
+
         # Populate NPCs in room
         game_response["npcs_in_room"] = []
         npcs_for_response = current_location_data_for_response.get("npcs", {})
@@ -1418,24 +1425,24 @@ def get_world_map_data_for_api(player_visited_locations, all_locations_data):
     Prepares world map data structured for API response.
     Returns a list of zones, each containing a list of location info.
     """
-    map_data_for_api = []
-    locations_by_zone = {}
+    # Send a flat list of locations with coordinates, visited status, and current location
+    map_locations = []
     for loc_id, loc_data in all_locations_data.items():
-        zone_name = loc_data.get("zone", "Uncharted Territories")
-        if zone_name not in locations_by_zone:
-            locations_by_zone[zone_name] = []
-        locations_by_zone[zone_name].append({
-            "id": loc_id,
-            "name": loc_data.get("name", loc_id),
-            "visited": loc_id in player_visited_locations
-        })
+        if "map_x" in loc_data and "map_y" in loc_data: # Only include locations with map coordinates
+            map_locations.append({
+                "id": loc_id,
+                "name": loc_data.get("name", loc_id),
+                "x": loc_data["map_x"],
+                "y": loc_data["map_y"],
+                "visited": loc_id in player_visited_locations,
+                "exits": loc_data.get("exits", {}) # Send the whole exits object {direction: target_loc_id}
+            })
+    
+    return {
+        "locations": map_locations,
+        "current_location_id": player.current_location_id if player and player.game_active else None
+    }
 
-    sorted_zone_names = sorted(locations_by_zone.keys())
-    for zone_name in sorted_zone_names:
-        # Sort locations within each zone by name
-        sorted_locations_in_zone = sorted(locations_by_zone[zone_name], key=lambda x: x["name"])
-        map_data_for_api.append({"zone_name": zone_name, "locations": sorted_locations_in_zone})
-    return map_data_for_api
 
 def draw_zone_map(current_loc_id):
     """Draws or lists locations in the current zone and returns them as a list of strings."""

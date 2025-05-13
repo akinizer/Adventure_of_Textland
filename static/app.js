@@ -1,6 +1,7 @@
 let creationStep = 'species'; // 'species', 'class', 'name_gender', 'done'
 let chosenSpecies = null;
 let chosenClass = null;
+let discoveredDeadEnds = {}; // Object to store: e.g., { "locationId_direction": true }
 let gameIsPaused = false;
 let gameIsActiveForInput = false; // True when game interface is shown
 const SESSION_STORAGE_GAME_ACTIVE_KEY = 'textRpgGameSessionActive';
@@ -266,6 +267,7 @@ async function submitCharacterCreation() {
         const initialSceneData = await response.json();
 
         creationArea.style.display = 'none';
+        discoveredDeadEnds = {}; // Reset for new character
         gameInterface.style.display = 'block';
         outputElement.innerHTML = ''; // Clear "creating character" message
         displaySceneData(initialSceneData, "Character created! Your adventure begins.");
@@ -322,6 +324,7 @@ async function handleLoadCharacter(characterName) {
         const loadedSceneData = await response.json();
 
         creationArea.style.display = 'none';
+        discoveredDeadEnds = {}; // Reset for loaded character
         gameInterface.style.display = 'block';
         outputElement.innerHTML = ''; 
         displaySceneData(loadedSceneData, `Loaded character: ${characterName}.`);
@@ -363,6 +366,7 @@ async function attemptResumeSession(characterName) {
         const resumedSceneData = await response.json();
 
         creationArea.style.display = 'none';
+        discoveredDeadEnds = {}; // Reset for resumed session
         gameInterface.style.display = 'block';
         outputElement.innerHTML = ''; 
         displaySceneData(resumedSceneData, `Session resumed for ${characterName}.`);
@@ -435,29 +439,97 @@ async function toggleWorldMapModal() {
 }
 
 function showWorldMapInModal(mapData) {
-    let mapHTML = '<div style="max-height: 400px; overflow-y: auto; text-align: left;">';
-    if (mapData && mapData.length > 0) {
-        mapData.forEach(zone => {
-            mapHTML += `<h3>${zone.zone_name}</h3><ul>`;
-            if (zone.locations && zone.locations.length > 0) {
-                zone.locations.forEach(loc => {
-                    const displayName = loc.visited ? loc.name : "???";
-                    const status = loc.visited ? "(Visited)" : "(Unvisited)";
-                    mapHTML += `<li>${displayName} ${status}</li>`;
-                });
-            } else {
-                mapHTML += `<li>(No locations mapped in this zone)</li>`;
+    const locations = mapData.locations || [];
+    const currentLocationId = mapData.current_location_id;
+
+    // Determine map dimensions dynamically or use fixed ones
+    let maxX = 0;
+    let maxY = 0;
+    locations.forEach(loc => {
+        if (loc.x > maxX) maxX = loc.x;
+        if (loc.y > maxY) maxY = loc.y;
+    });
+
+    const gridWidth = maxX + 1; // 0-indexed
+    const gridHeight = maxY + 1; // 0-indexed
+
+    // Emojis
+    const EMOJI_CURRENT = '📍'; // Or '🧍'
+    const EMOJI_VISITED = '🟩';
+    const EMOJI_UNVISITED_KNOWN = '🟨'; // If you want to distinguish known but unvisited
+    const EMOJI_EMPTY = '⬜'; // For empty grid cells
+    const OUTER_BORDER_COLOR = '#777'; 
+    const NO_BORDER_STYLE = 'none'; // More forceful way to remove border
+
+    let mapHTML = `<div class="world-map-grid-container" style="font-size: 1.5em; line-height: 1; text-align: center; max-height: 400px; overflow-y: auto;">`;
+    mapHTML += `<table style="margin: auto; border-collapse: collapse;">`;
+
+    for (let y = 0; y < gridHeight; y++) {
+        mapHTML += '<tr>';
+        for (let x = 0; x < gridWidth; x++) {
+            const locationAtCell = locations.find(loc => loc.x === x && loc.y === y);
+            let cellEmoji = EMOJI_EMPTY;
+            let cellTitle = `(${x},${y})`;
+            let borderStyles = {
+                top: NO_BORDER_STYLE, // Default to no borders for all cells initially
+                right: NO_BORDER_STYLE,
+                bottom: NO_BORDER_STYLE,
+                left: NO_BORDER_STYLE
+            };
+            
+            if (locationAtCell) {
+                cellTitle = `${locationAtCell.name} (${x},${y})`;
+                if (locationAtCell.exits && Object.keys(locationAtCell.exits).length > 0) {
+                    const exitDirections = Object.keys(locationAtCell.exits).join(', ');
+                    cellTitle += ` (Exits: ${exitDirections})`;
+                }
+
+                // Determine base emoji
+                if (locationAtCell.id === currentLocationId) {
+                    cellEmoji = EMOJI_CURRENT;
+                } else if (locationAtCell.visited) {
+                    cellEmoji = EMOJI_VISITED;
+                } else {
+                    cellEmoji = EMOJI_UNVISITED_KNOWN; // Or EMOJI_EMPTY if you don't want to show unvisited
+                }
+
+                // Determine borders based on exits and visited status of neighbors
+                if (locationAtCell.visited || locationAtCell.id === currentLocationId) { // Only visited/current can have borders
+                    // Default to NO_BORDER_STYLE for visited/current cells.
+                    // A border is added ONLY if the player has tried to go that way and failed.
+                    borderStyles.top = NO_BORDER_STYLE;
+                    borderStyles.right = NO_BORDER_STYLE;
+                    borderStyles.bottom = NO_BORDER_STYLE;
+                    borderStyles.left = NO_BORDER_STYLE;
+
+                    if (discoveredDeadEnds[`${locationAtCell.id}_north`]) borderStyles.top = `1px solid ${OUTER_BORDER_COLOR}`;
+                    if (discoveredDeadEnds[`${locationAtCell.id}_east`]) borderStyles.right = `1px solid ${OUTER_BORDER_COLOR}`;
+                    if (discoveredDeadEnds[`${locationAtCell.id}_south`]) borderStyles.bottom = `1px solid ${OUTER_BORDER_COLOR}`;
+                    if (discoveredDeadEnds[`${locationAtCell.id}_west`]) borderStyles.left = `1px solid ${OUTER_BORDER_COLOR}`;
+
+                } else if (cellEmoji === EMOJI_UNVISITED_KNOWN) {
+                    // Known but unvisited locations also default to NO_BORDER_STYLE (already set)
+                } else { // EMOJI_EMPTY or any other unhandled case
+                     // For truly empty cells, add a faint grid line
+                     borderStyles.top = `1px solid #eee`; 
+                     borderStyles.right = `1px solid #eee`;
+                     borderStyles.bottom = `1px solid #eee`;
+                     borderStyles.left = `1px solid #eee`;
+                }
             }
-            mapHTML += `</ul>`;
-        });
-    } else {
-        mapHTML += "<p>No map data available or you haven't explored yet.</p>";
+            const cellStyle = `padding: 0px; border-top: ${borderStyles.top}; border-right: ${borderStyles.right}; border-bottom: ${borderStyles.bottom}; border-left: ${borderStyles.left}; width: 1.5em; height: 1.5em; text-align: center; vertical-align: middle;`;
+            mapHTML += `<td title="${cellTitle}" style="${cellStyle}">${cellEmoji}</td>`;
+        }
+        mapHTML += '</tr>';
     }
-    mapHTML += '</div>';
+    mapHTML += `</table>`;
+
+    mapHTML += `<div style="margin-top: 10px; font-size: 0.8em;">Legend: ${EMOJI_CURRENT} Current, ${EMOJI_VISITED} Visited, ${EMOJI_UNVISITED_KNOWN} Known, ${EMOJI_EMPTY} Empty</div>`;
+    mapHTML += `</div>`;
+
 
     // Use the existing showMenuModal to display this content
     showMenuModal("World Map", mapHTML, [{text: "Close", action: () => {}}]);
-    // Adjust modal ID if needed for specific styling or targeting by closeModal
     const modalOverlay = document.getElementById('custom-modal-overlay');
     if (modalOverlay) modalOverlay.id = 'world-map-modal-overlay'; // So toggle can find it
 }
@@ -491,6 +563,29 @@ function displaySceneData(data, actionStringEcho = null) {
     // --- Component: Game Output Area ---
     function updateGameOutputComponent(data, actionStringEcho) {
         const outputElement = document.getElementById('game-output');
+        // Logic to populate discoveredDeadEnds
+        if (actionStringEcho && actionStringEcho.toLowerCase().startsWith('go ')) {
+            console.log("[DeadEndDebug] 'go' action detected. Echo:", actionStringEcho); //1
+            console.log("[DeadEndDebug] Server message:", data.message); //2
+            console.log("[DeadEndDebug] Location ID from server (data.player_current_location_id):", data.player_current_location_id); //3
+
+            if (data.message && data.message.toLowerCase().startsWith("you can't go")) { // Check #A
+                console.log("[DeadEndDebug] Condition A MET: 'You can't go' message confirmed.");
+                const directionAttempted = actionStringEcho.split(' ')[1].toLowerCase();
+                const locIdFromWhichAttempted = data.player_current_location_id; 
+                
+                if (locIdFromWhichAttempted && directionAttempted) { // Check #B
+                    console.log("[DeadEndDebug] Condition B MET: locIdFromWhichAttempted AND directionAttempted are present.");
+                    const deadEndKey = `${locIdFromWhichAttempted}_${directionAttempted}`;
+                    discoveredDeadEnds[deadEndKey] = true;
+                    console.log("[DeadEndDebug] SUCCESS: Discovered dead end:", deadEndKey, "Current dead ends:", JSON.parse(JSON.stringify(discoveredDeadEnds)));
+                } else {
+                    console.error("[DeadEndDebug] FAILED Condition B: Missing locIdFromWhichAttempted or directionAttempted. locId:", locIdFromWhichAttempted, "dir:", directionAttempted);
+                }
+            } else {
+                console.log("[DeadEndDebug] FAILED Condition A: Message ('" + data.message + "') did not indicate a blocked 'go' action.");
+            }
+        }
         if (!outputElement) return;
 
         outputElement.innerHTML = ''; // Clear previous output
@@ -528,6 +623,7 @@ function displaySceneData(data, actionStringEcho = null) {
     // --- End Component: Game Output Area ---
 
     // --- Component: Feature Interactions Panel ---
+
     function updateFeatureInteractionsComponent(featuresData) {
         const featurePanel = document.getElementById('feature-interactions-panel');
         if (!featurePanel) return;

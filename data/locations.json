@@ -2,6 +2,8 @@
     "eldoria_square": {
         "name": "Eldoria Town Square",
         "zone": "Eldoria",
+        "map_x": 1,
+        "map_y": 1,
         "description": "The bustling heart of Eldoria. A grand fountain stands in the center. Paths lead east to the market and south towards the city gate.",
         "exits": {"east": "eldoria_market", "south": "eldoria_south_gate"},
         "items": ["shiny_coin", "healing_potion"],
@@ -25,6 +27,8 @@
     "eldoria_market": {
         "name": "Eldoria Market",
         "zone": "Eldoria",
+        "map_x": 2,
+        "map_y": 1,
         "description": "A vibrant street filled with stalls. Merchants call out, offering various goods. The town square is to the west.",
         "exits": {"west": "eldoria_square"},
         "items": ["apple", "bread_loaf"],
@@ -48,6 +52,8 @@
     "eldoria_south_gate": {
         "name": "Eldoria South Gate",
         "zone": "Eldoria",
+        "map_x": 1,
+        "map_y": 2,
         "description": "Massive wooden gates mark the southern exit of Eldoria. A well-worn path leads south into the countryside. The town square is to the north.",
         "exits": {"north": "eldoria_square", "south": "southern_road_1"},
         "npcs": {}
@@ -55,6 +61,8 @@
     "southern_road_1": {
         "name": "Southern Road - Part 1",
         "zone": "SouthernRoad",
+        "map_x": 1,
+        "map_y": 3,
         "description": "You are on a dusty road leading south from Eldoria. Fields stretch to either side. To the east, you spot the dark opening of a cave. The road continues south.",
         "exits": {"north": "eldoria_south_gate", "south": "southern_road_2", "east": "gloomy_cave_entrance"},
         "items": [],
@@ -63,6 +71,8 @@
     "gloomy_cave_entrance": {
         "name": "Gloomy Cave Entrance",
         "zone": "SouthernRoad",
+        "map_x": 2,
+        "map_y": 3,
         "description": "The air is cold and damp around this dark cave mouth. Strange noises echo from within. This looks like a dangerous place.",
         "exits": {"west": "southern_road_1"},
         "items": ["rusty_key"],
@@ -100,6 +110,8 @@
     "southern_road_2": {
         "name": "Southern Road - Part 2",
         "zone": "SouthernRoad",
+        "map_x": 1,
+        "map_y": 4,
         "description": "The road continues south. In the distance, you can see the town of Riverford nestled by a river. The path north leads back towards Eldoria.",
         "exits": {"north": "southern_road_1", "south": "riverford_north_gate"},
         "items": [],
@@ -108,6 +120,8 @@
     "riverford_north_gate": {
         "name": "Riverford North Gate",
         "zone": "Riverford",
+        "map_x": 1,
+        "map_y": 5,
         "description": "You stand at the northern gate of Riverford. The town looks quieter than Eldoria. The main square is to the south.",
         "exits": {"north": "southern_road_2", "south": "riverford_square"},
         "npcs": {}
@@ -115,6 +129,8 @@
     "riverford_square": {
         "name": "Riverford Town Square",
         "zone": "Riverford",
+        "map_x": 1,
+        "map_y": 6,
         "description": "A quaint town square with a small, bubbling spring. A few townsfolk go about their business. The docks are to the east.",
         "exits": {"north": "riverford_north_gate", "east": "riverford_docks"},
         "items": [],
@@ -131,6 +147,8 @@
     "riverford_docks": {
         "name": "Riverford Docks",
         "zone": "Riverford",
+        "map_x": 2,
+        "map_y": 6,
         "description": "Wooden planks form a series of docks along the river. Fishing boats are moored here. The town square is to the west.",
         "exits": {"west": "riverford_square"},
         "items": ["fishing_net_scraps"],
@@ -147,6 +165,8 @@
      "deep_woods": {
         "name": "Deep Woods",
         "zone": "WhisperingWoods",
+        "map_x": 0, 
+        "map_y": 3,
         "description": "You are deep within the woods. It's eerily quiet. The path back south is the only clear way out.\nYou spot a small, old chest on the ground.",
         "exits": {"south": "forest_entrance_placeholder"},
         "items": [],
@@ -165,6 +185,8 @@
     "forest_entrance_placeholder": {
         "name": "Edge of the Deep Woods",
         "zone": "WhisperingWoods",
+        "map_x": 0, 
+        "map_y": 4,
         "description": "You are at an entrance to the Deep Woods. It looks untamed.",
         "exits": {"north": "deep_woods", "east": "whispering_woods_path"},
         "items": ["strange_berries"],
@@ -185,6 +207,8 @@
     "whispering_woods_path": {
         "name": "Whispering Woods Path",
         "zone": "WhisperingWoods",
+        "map_x": 1, 
+        "map_y": 4, 
         "description": "A winding path through the Whispering Woods. Sunlight dapples through the leaves. You hear rustling nearby.",
         "exits": {"west": "forest_entrance_placeholder", "east": "ancient_grove"},
         "items": [],
@@ -231,6 +255,8 @@
     "ancient_grove": {
         "name": "Ancient Grove",
         "zone": "WhisperingWoods",
+        "map_x": 2,
+        "map_y": 4,
         "description": "A serene grove with a very old, wise-looking tree at its center.",
         "exits": {"west": "whispering_woods_path"},
         "features": {
@@ -246,7 +272,9 @@
     },
     "generic_start_room": {
         "name": "Dimly Lit Chamber",
-        "zone": "StartingZone",
+        "zone": "Starter Dungeons",
+        "map_x": 0,
+        "map_y": 0,
         "description": "This small, stone chamber is cold and damp. A faint light filters in from a crack in the ceiling. There's a worn wooden crate in one corner.",
         "exits": {"out": "eldoria_square"},
         "items": [],
