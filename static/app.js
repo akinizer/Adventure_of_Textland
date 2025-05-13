@@ -50,8 +50,14 @@ function showMenuModal(title, message, buttonsConfig) {
     }
 }
 function closeModal() {
-    const modalOverlay = document.getElementById('custom-modal-overlay');
-    if (modalOverlay) modalOverlay.remove();
+    let modalOverlay = document.getElementById('custom-modal-overlay');
+    if (modalOverlay) {
+        modalOverlay.remove();
+    } else { // Fallback to check for the world map modal ID specifically
+        modalOverlay = document.getElementById('world-map-modal-overlay');
+        if (modalOverlay) modalOverlay.remove();
+    }
+
 }
 
 async function showInitialCharacterScreen() {
@@ -399,6 +405,61 @@ async function performAction(actionString) {
         outputElement.appendChild(p_error);
     }
     outputElement.scrollTop = outputElement.scrollHeight;
+}
+
+async function toggleWorldMapModal() {
+    const existingModal = document.getElementById('world-map-modal-overlay');
+    if (existingModal) {
+        closeModal(); // Assumes closeModal() removes any modal with 'custom-modal-overlay' or similar
+        return;
+    }
+
+    if (!gameIsActiveForInput) { // Or check player.game_active if available client-side
+        console.log("Game not active, cannot show world map.");
+        // Optionally show a small message to the player
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/get_world_map');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const mapData = await response.json();
+        showWorldMapInModal(mapData);
+    } catch (error) {
+        console.error("Error fetching world map data:", error);
+        // Optionally show an error to the player
+        showMenuModal("Error", `Could not load world map: ${error.message}`, [{text: "Close", action: () => {}}]);
+    }
+}
+
+function showWorldMapInModal(mapData) {
+    let mapHTML = '<div style="max-height: 400px; overflow-y: auto; text-align: left;">';
+    if (mapData && mapData.length > 0) {
+        mapData.forEach(zone => {
+            mapHTML += `<h3>${zone.zone_name}</h3><ul>`;
+            if (zone.locations && zone.locations.length > 0) {
+                zone.locations.forEach(loc => {
+                    const displayName = loc.visited ? loc.name : "???";
+                    const status = loc.visited ? "(Visited)" : "(Unvisited)";
+                    mapHTML += `<li>${displayName} ${status}</li>`;
+                });
+            } else {
+                mapHTML += `<li>(No locations mapped in this zone)</li>`;
+            }
+            mapHTML += `</ul>`;
+        });
+    } else {
+        mapHTML += "<p>No map data available or you haven't explored yet.</p>";
+    }
+    mapHTML += '</div>';
+
+    // Use the existing showMenuModal to display this content
+    showMenuModal("World Map", mapHTML, [{text: "Close", action: () => {}}]);
+    // Adjust modal ID if needed for specific styling or targeting by closeModal
+    const modalOverlay = document.getElementById('custom-modal-overlay');
+    if (modalOverlay) modalOverlay.id = 'world-map-modal-overlay'; // So toggle can find it
 }
 
 function displaySceneData(data, actionStringEcho = null) {
@@ -763,7 +824,6 @@ function displaySceneData(data, actionStringEcho = null) {
         }
         // --- End Component: NPC Interactions Panel ---
         updateNPCInteractionPanelComponent(data.npcs_in_room);
-
 }
 
 // Initial load
@@ -801,6 +861,12 @@ window.onload = () => {
         if ((event.key === 'p' || event.key === 'P') && !event.repeat && gameIsActiveForInput) {
             togglePauseGame();
         }
+        // Add listener for 'M' key to toggle world map
+        if ((event.key === 'm' || event.key === 'M') && !event.repeat && gameIsActiveForInput) {
+            event.preventDefault(); // Prevent 'm' from typing if in an input field (though unlikely here)
+            toggleWorldMapModal();
+        }
+
     });
 };
 

@@ -160,9 +160,13 @@ def load_all_game_data():
 # Initial load of game data when the script starts
 load_all_game_data()
 
-
 web_server_thread = None
-flask_app_instance = None
+
+# Create Flask app instance at the global level if flask is available
+if flask_available:
+    flask_app_instance = Flask(__name__)
+else:
+    flask_app_instance = None # Keep it None if Flask can't be imported
 
 def _get_terminal_character_choices():
     """Handles terminal input for character creation choices."""
@@ -299,9 +303,12 @@ def save_player_data(player_to_save, reason_for_save="Game state saved"):
     # Always save to the canonical save file name that load_character_data uses.
     save_file_path = os.path.join(player_specific_dir, "character_creation.json")
     try:
+        data_to_save = player_to_save.__dict__.copy()
+        # Convert set to list for JSON serialization
+        if isinstance(data_to_save.get("visited_locations"), set):
+            data_to_save["visited_locations"] = list(data_to_save["visited_locations"])
         with open(save_file_path, 'w') as f:
-            # Convert Player object to a dictionary for JSON serialization
-            json.dump(player_to_save.__dict__, f, indent=4)
+            json.dump(data_to_save, f, indent=4)
         print(f"[Save] {reason_for_save}. Player data for '{player_to_save.name}' saved to {save_file_path}")
         return True # Indicate success
     except Exception as e:
@@ -340,6 +347,12 @@ def load_character_data(character_display_name):
             player = Player(name=player_data_dict.get("name", "Adventurer"), gender=player_data_dict.get("gender", "Unspecified"))
             for key, value in player_data_dict.items():
                 setattr(player, key, value) # Set all attributes from the loaded dict
+            
+            # Convert loaded list of visited locations back to a set
+            if "visited_locations" in player_data_dict and isinstance(player_data_dict["visited_locations"], list):
+                player.visited_locations = set(player_data_dict["visited_locations"])
+            else: # Ensure it's always a set, even if missing from old save or malformed
+                player.visited_locations = set()
             player.game_active = True # Ensure game is marked active
             print(f"\nCharacter '{player.name}' loaded successfully.")
             return True
@@ -399,6 +412,7 @@ def initialize_game_state():
     
     species_info = species_data[player.species_id]
     print(f"\n{species_info['backstory_intro']}")
+    player.visited_locations.add("generic_start_room") # Mark starting room as visited
 
     start_room_id = "generic_start_room" 
     player.move_to(start_room_id) # Player object's method
@@ -414,18 +428,18 @@ def initialize_game_state():
 def start_combat(npc_id):
     player.enter_combat(npc_id) # Player object's method
     current_loc_npcs = locations[player.current_location_id].get("npcs", {})
-    if npc_id not in current_loc_npcs or not current_loc_npcs[npc_id].get("hp"):
+    npc_object = current_loc_npcs.get(npc_id)
+    if not npc_object or not npc_object.is_alive(): # Use NPC object method
         return
-    npc_data = current_loc_npcs[npc_id]
     print(f"\n--- COMBAT START ---")
-    print(f"You are attacked by {npc_data['name']}!")
+    print(f"You are attacked by {npc_object.name}!")
 
 def handle_npc_defeat(npc_id):
     current_loc_data = locations[player.current_location_id]
-    npc_data = current_loc_data["npcs"][npc_id]
-    print(f"\n{npc_data['name']} has been defeated!")
+    npc_object = current_loc_data["npcs"][npc_id] # Get the NPC object
+    print(f"\n{npc_object.name} has been defeated!")
     
-    loot_item_ids = npc_data.get("loot", [])
+    loot_item_ids = npc_object.loot # Access attribute
     if loot_item_ids:
         dropped_items_details = []
         for item_id in loot_item_ids:
@@ -434,15 +448,15 @@ def handle_npc_defeat(npc_id):
                 item_detail["value"] = items_data.get(item_id, {}).get("value")
             dropped_items_details.append(item_detail)
         log_game_event("npc_loot_dropped", {
-            "npc_id": npc_id, "npc_name": npc_data.get("name"), "dropped_items": dropped_items_details,
+            "npc_id": npc_id, "npc_name": npc_object.name, "dropped_items": dropped_items_details,
             "location_id": player.current_location_id
         })
-        for item_id in npc_data["loot"]:
+        for item_id in npc_object.loot:
             current_loc_data.setdefault("items", []).append(item_id)
-            print(f"{npc_data['name']} dropped a {items_data.get(item_id, {}).get('name', item_id)}!")
+            print(f"{npc_object.name} dropped a {items_data.get(item_id, {}).get('name', item_id)}!")
     
     # Award XP for defeating NPC
-    xp_reward = npc_data.get("xp_reward", 25) # Default XP or define in NPC data
+    xp_reward = getattr(npc_object, 'xp_reward', 25) # Use getattr for optional attribute, or ensure it's in __init__
     player.add_xp(xp_reward, log_event_func=log_game_event) 
     player._recalculate_derived_stats(items_data) # Recalculate stats after potential level up from XP
 
@@ -459,21 +473,21 @@ def npc_combat_turn():
     if npc_id not in current_loc_data["npcs"]:
         return 
 
-    npc_data = current_loc_data["npcs"][npc_id]
+    npc_object = current_loc_data["npcs"][npc_id] # Get NPC object
 
-    if npc_data["hp"] <= 0: 
+    if not npc_object.is_alive(): # Use NPC method
         return
 
-    print(f"\n{npc_data['name']}'s turn...")
-    damage_to_player = npc_data["attack_power"]
+    print(f"\n{npc_object.name}'s turn...")
+    damage_to_player = npc_object.attack_power # Access attribute
     
     if player.is_deflecting:
         damage_to_player = max(0, damage_to_player // 2) 
         print(f"You deflect part of the blow!")
         player.set_deflecting(False) # Player object's method
 
-    player.take_damage(damage_to_player) # Use method
-    print(f"{npc_data['name']} attacks you for {damage_to_player} damage.")
+    player.take_damage(damage_to_player) # Player method
+    print(f"{npc_object.name} attacks you for {damage_to_player} damage.")
     print(f"You have {player.hp}/{player.max_hp} HP remaining.")
 
     if player.hp <= 0:
@@ -552,12 +566,11 @@ def run_minimal_web_server():
     if not flask_available:
         return
 
-    flask_app_instance = Flask(__name__)
-
-    @flask_app_instance.route('/')
-    def web_index():
+    # Routes are now defined globally, so this function just runs the app
+    if not flask_app_instance: # Should not happen if flask_available was true
+        print("[ERROR] Flask app instance not created despite Flask being available.")
         # The MAX_NAME_LENGTH will be passed to the template
-        return render_template('index.jinja', max_name_length=MAX_NAME_LENGTH)
+        return
 
     # Optional: Flask endpoint to sync pause state with server if needed later
     # @flask_app_instance.route('/api/set_pause_state', methods=['POST'])
@@ -566,6 +579,25 @@ def run_minimal_web_server():
     #     player["is_paused"] = data.get("paused", False)
     #     return jsonify({"message": "Pause state updated", "is_paused": player["is_paused"]})
 
+    # --- Flask Routes Definition ---
+    # Move all @flask_app_instance.route decorators here, or ensure they are defined after flask_app_instance is created globally.
+    # For simplicity, we'll assume they are already defined globally using the flask_app_instance.
+    # The actual run command is at the end of this function.
+
+    print("Starting web server on http://127.0.0.1:5000/ ...")
+    try:
+        flask_app_instance.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
+    except Exception as e:
+        print(f"Failed to start or run web server: {e}")
+
+# --- Flask Routes Definition ---
+# Define all routes here, using the global flask_app_instance
+
+if flask_app_instance: # Only define routes if Flask app was successfully created
+    @flask_app_instance.route('/')
+    def web_index():
+        # The MAX_NAME_LENGTH will be passed to the template
+        return render_template('index.jinja', max_name_length=MAX_NAME_LENGTH)
 
     @flask_app_instance.route('/process_game_action', methods=['POST'])
     def process_game_action_route():
@@ -781,32 +813,32 @@ def run_minimal_web_server():
             current_location_data = locations.get(current_loc_id, {})
             npcs_in_room = current_location_data.get("npcs", {}) # This now contains NPC objects
             
-            npc_object = npcs_in_room.get(npc_id_to_talk_to)
+            target_npc_object = npcs_in_room.get(npc_id_to_talk_to) # Renamed for clarity
 
-            if npc_object:
-                game_response["message"] = f"You approach {npc_object.name}.\n"
+            if target_npc_object:
+                game_response["message"] = f"You approach {target_npc_object.name}.\n"
                 
-                if npc_object.pre_combat_dialogue and npc_object.dialogue_options:
-                    game_response["message"] += f"{npc_object.name} says: \"{npc_object.pre_combat_dialogue}\""
-                    player.start_dialogue(npc_object.id, npc_object.dialogue_options)
+                if target_npc_object.pre_combat_dialogue and target_npc_object.dialogue_options:
+                    game_response["message"] += f"{target_npc_object.name} says: \"{target_npc_object.pre_combat_dialogue}\""
+                    player.start_dialogue(target_npc_object.id, target_npc_object.dialogue_options)
                     # If you want to send dialogue options to UI:
                     # game_response["dialogue_npc_id"] = player.dialogue_npc_id
                     # game_response["dialogue_options_pending"] = player.dialogue_options_pending
-                elif npc_object.type == "quest_giver_simple":
-                    if npc_object.quest_item_needed in player.inventory:
-                        game_response["message"] += f"{npc_object.name} says: \"{npc_object.dialogue_after_quest_complete or 'Thank you!'}\""
-                        game_logic.remove_item_from_player_inventory(player, items_data, npc_object.quest_item_needed, source=f"quest_turn_in_web_{npc_object.id}", log_event_func=log_game_event)
-                        if npc_object.quest_reward_item:
-                            reward_msg = game_logic.award_item_to_player(player, items_data, npc_object.quest_reward_item, source=f"quest_reward_web_{npc_object.id}", log_event_func=log_game_event)
+                elif target_npc_object.type == "quest_giver_simple":
+                    if target_npc_object.quest_item_needed in player.inventory:
+                        game_response["message"] += f"{target_npc_object.name} says: \"{target_npc_object.dialogue_after_quest_complete or 'Thank you!'}\""
+                        game_logic.remove_item_from_player_inventory(player, items_data, target_npc_object.quest_item_needed, source=f"quest_turn_in_web_{target_npc_object.id}", log_event_func=log_game_event)
+                        if target_npc_object.quest_reward_item:
+                            reward_msg = game_logic.award_item_to_player(player, items_data, target_npc_object.quest_reward_item, source=f"quest_reward_web_{target_npc_object.id}", log_event_func=log_game_event)
                             game_response["message"] += f"\n{reward_msg}"
-                        if npc_object.quest_reward_currency > 0:
-                            player.add_coins(npc_object.quest_reward_currency, log_event_func=log_game_event, source=f"quest_reward_web_{npc_object.id}")
-                            game_response["message"] += f"\nYou are also rewarded with {npc_object.quest_reward_currency} coins."
+                        if target_npc_object.quest_reward_currency > 0:
+                            player.add_coins(target_npc_object.quest_reward_currency, log_event_func=log_game_event, source=f"quest_reward_web_{target_npc_object.id}")
+                            game_response["message"] += f"\nYou are also rewarded with {target_npc_object.quest_reward_currency} coins."
                     else:
-                        game_response["message"] += f"{npc_object.name} says: \"{npc_object.dialogue_after_quest_incomplete or npc_object.dialogue}\""
+                        game_response["message"] += f"{target_npc_object.name} says: \"{target_npc_object.dialogue_after_quest_incomplete or target_npc_object.dialogue}\""
                 # Add other NPC type interactions (hostile, vendor, standard dialogue) here, similar to process_command
                 else: # Standard dialogue for now
-                    game_response["message"] += f"{npc_object.name} says: \"{npc_object.dialogue}\""
+                    game_response["message"] += f"{target_npc_object.name} says: \"{target_npc_object.dialogue}\""
             else:
                 game_response["message"] = f"You can't find anyone with ID '{npc_id_to_talk_to}' here to talk to." # Changed to ID for clarity
             
@@ -1176,17 +1208,15 @@ def run_minimal_web_server():
         print("Test route accessed!")
         return "This is the test route. If you see this, routing is partially working."
 
-    print("Starting web server on http://127.0.0.1:5000/ ...")
-    try:
-        flask_app_instance.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
-    except Exception as e:
-        print(f"Failed to start or run web server: {e}")
-
 def launch_web_interface():
     global web_server_thread
     if not flask_available:
         print("\nFlask library not found. Cannot start browser interface.")
         print("Please install Flask to use this feature (e.g., 'pip install Flask').")
+        return
+
+    if not flask_app_instance:
+        print("[ERROR] Flask app instance is not available. Cannot start web server.")
         return
 
     if web_server_thread and web_server_thread.is_alive():
@@ -1221,8 +1251,8 @@ def show_current_scene():
 
     if player.dialogue_npc_id and player.dialogue_options_pending:
         npc_id = player.dialogue_npc_id
-        npc_data = locations[player.current_location_id]["npcs"][npc_id]
-        print(f"\n--- Talking to {npc_data['name']} ---")
+        npc_object = locations[player.current_location_id]["npcs"][npc_id] # Get NPC object
+        print(f"\n--- Talking to {npc_object.name} ---")
         print("Choose an option:")
         for key, option_data in player.dialogue_options_pending.items():
             print(f"  {key}. {option_data['text']}")
@@ -1235,10 +1265,10 @@ def show_current_scene():
             print(f"[Error] Combat target {npc_id} not found. Ending combat.")
             player.combat_target_id = None
         else:
-            npc_data = locations[player.current_location_id]["npcs"][npc_id]
+            npc_object = locations[player.current_location_id]["npcs"][npc_id] # Get NPC object
             print("\n--- IN COMBAT ---")
             print(f"Your HP: {player.hp}/{player.max_hp}")
-            print(f"Enemy: {npc_data['name']} | HP: {npc_data['hp']}/{npc_data['max_hp']}")
+            print(f"Enemy: {npc_object.name} | HP: {npc_object.hp}/{npc_object.max_hp}")
             print(HOSTILE_MOB_VISUAL)
             
             print("\nCombat Commands:")
@@ -1272,12 +1302,12 @@ def show_current_scene():
 
     room_npcs = location_data.get("npcs", {})
     hostiles_present_desc = False
-    for npc_id, npc_data in room_npcs.items():
-        if npc_data.get("hostile") and player.combat_target_id != npc_id :
+    for npc_id, npc_object in room_npcs.items(): # Iterate through NPC objects
+        if npc_object.hostile and player.combat_target_id != npc_id :
             if not hostiles_present_desc:
                 print("\nDanger!")
                 hostiles_present_desc = True
-            print(f"A menacing {npc_data['name']} is here!")
+            print(f"A menacing {npc_object.name} is here!")
 
     if "features" in location_data and location_data["features"]:
         print("\nYou notice:")
@@ -1295,9 +1325,9 @@ def show_current_scene():
 
     if room_npcs:
         print("\nPeople here:")
-        for npc_id, npc_data in room_npcs.items():
-            if not npc_data.get("hostile") or (npc_data.get("hostile") and player.combat_target_id != npc_id):
-                 print(f"  - {npc_data['name']} ({npc_data.get('description', 'An interesting individual.')})")
+        for npc_id, npc_object in room_npcs.items(): # Iterate through NPC objects
+            if not npc_object.hostile or (npc_object.hostile and player.combat_target_id != npc_id):
+                 print(f"  - {npc_object.name} ({npc_object.description or 'An interesting individual.'})")
     
     room_items = location_data.get("items", [])
     if room_items:
@@ -1331,8 +1361,8 @@ def show_current_scene():
                 print(f"  open worn crate") # Or search, depending on defined actions
                 break
     
-    if any(not npc.get("hostile") or (npc.get("hostile") and player.combat_target_id != npc_id) for npc_id, npc in room_npcs.items()):
-        available_to_talk = [npc["name"] for npc_id, npc in room_npcs.items() if not npc.get("hostile") or (npc.get("hostile") and player.combat_target_id != npc_id)]
+    if any(not npc_obj.hostile or (npc_obj.hostile and player.combat_target_id != npc_id) for npc_id, npc_obj in room_npcs.items()):
+        available_to_talk = [npc_obj.name for npc_id, npc_obj in room_npcs.items() if not npc_obj.hostile or (npc_obj.hostile and player.combat_target_id != npc_id)]
         if available_to_talk:
             print(f"  talk <npc_name>")
             if len(available_to_talk) <= 3:
@@ -1344,7 +1374,68 @@ def show_current_scene():
         if feature_data.get("actions") and not (feature_name == "worn_crate" and feature_data.get("closed")): # Don't suggest generic action if specific "open" is suggested
             first_action = list(feature_data["actions"].keys())[0]
             print(f"  {first_action} {feature_name.replace('_', ' ')}")
+    print(f"  worldmap       - View the world map.")
 
+
+def display_world_map():
+    """Displays the world map, showing visited locations."""
+    print("\n--- World Map ---")
+    
+    # Group locations by zone
+    locations_by_zone = {}
+    for loc_id, loc_data in locations.items():
+        zone = loc_data.get("zone", "Uncharted Territories")
+        if zone not in locations_by_zone:
+            locations_by_zone[zone] = []
+        locations_by_zone[zone].append((loc_id, loc_data.get("name", loc_id)))
+
+    sorted_zones = sorted(locations_by_zone.keys())
+
+    for zone in sorted_zones:
+        print(f"\n  [{zone}]")
+        if not locations_by_zone[zone]:
+            print("    (No locations mapped in this zone)")
+            continue
+        for loc_id, loc_name in sorted(locations_by_zone[zone], key=lambda x: x[1]): # Sort locations by name
+            if loc_id in player.visited_locations:
+                print(f"    - {loc_name} (Visited)")
+            else:
+                print(f"    - ??? (Unvisited)") # Or just loc_name if you want to show all names
+    print("\n-----------------")
+
+# Ensure this route is also defined only if flask_app_instance exists
+if flask_app_instance:
+    @flask_app_instance.route('/api/get_world_map', methods=['GET'])
+    def get_world_map_route(): # Renamed the function to avoid conflict with the helper
+        if not player.game_active: # Ensure game is active and player object exists
+            return jsonify({"error": "Game not active or player not loaded."}), 400
+        
+        world_map_structured_data = get_world_map_data_for_api(player.visited_locations, locations)
+        return jsonify(world_map_structured_data)
+
+def get_world_map_data_for_api(player_visited_locations, all_locations_data):
+    """
+    Prepares world map data structured for API response.
+    Returns a list of zones, each containing a list of location info.
+    """
+    map_data_for_api = []
+    locations_by_zone = {}
+    for loc_id, loc_data in all_locations_data.items():
+        zone_name = loc_data.get("zone", "Uncharted Territories")
+        if zone_name not in locations_by_zone:
+            locations_by_zone[zone_name] = []
+        locations_by_zone[zone_name].append({
+            "id": loc_id,
+            "name": loc_data.get("name", loc_id),
+            "visited": loc_id in player_visited_locations
+        })
+
+    sorted_zone_names = sorted(locations_by_zone.keys())
+    for zone_name in sorted_zone_names:
+        # Sort locations within each zone by name
+        sorted_locations_in_zone = sorted(locations_by_zone[zone_name], key=lambda x: x["name"])
+        map_data_for_api.append({"zone_name": zone_name, "locations": sorted_locations_in_zone})
+    return map_data_for_api
 
 def draw_zone_map(current_loc_id):
     """Draws or lists locations in the current zone and returns them as a list of strings."""
@@ -1419,6 +1510,9 @@ def process_command(full_command_input):
     elif command == "!quit": 
         print(f"\nYou decide to end your adventure here. Farewell!" if player.game_active else "\nFarewell!")
         return False
+    elif command == "worldmap":
+        display_world_map()
+        return True
     
     if not player.game_active:
         print(f"Unknown command: '{full_command}'. Type '!start' to begin.")
@@ -1426,10 +1520,10 @@ def process_command(full_command_input):
 
     if player.dialogue_npc_id and player.dialogue_options_pending:
         npc_id = player.dialogue_npc_id
-        npc_data = locations[player.current_location_id]["npcs"][npc_id]
+        npc_object = locations[player.current_location_id]["npcs"][npc_id] # Get NPC object
         
         if full_command == "leave":
-            print(f"You end the conversation with {npc_data['name']}.")
+            print(f"You end the conversation with {npc_object.name}.")
             player.end_dialogue() # Player object's method
             return True
 
@@ -1437,7 +1531,7 @@ def process_command(full_command_input):
         if chosen_option_data:
             print(f"\n> {chosen_option_data['text']}") 
             if chosen_option_data.get("response"):
-                print(f"{npc_data['name']} says: \"{chosen_option_data['response']}\"")
+                print(f"{npc_object.name} says: \"{chosen_option_data['response']}\"")
             
             if chosen_option_data.get("triggers_combat"):
                 player.end_dialogue() # End dialogue before starting combat
@@ -1455,14 +1549,14 @@ def process_command(full_command_input):
             player.leave_combat() # Player object's method
             return True 
 
-        npc_data = locations[player.current_location_id]["npcs"][npc_id]
+        npc_object = locations[player.current_location_id]["npcs"][npc_id] # Get NPC object
         action_taken = False
 
         if command == "attack":
             damage = player.attack_power
-            npc_data["hp"] -= damage
-            print(f"You attack {npc_data['name']} for {damage} damage.")
-            if npc_data["hp"] <= 0:
+            npc_object.take_damage(damage) # Use NPC method
+            print(f"You attack {npc_object.name} for {damage} damage.")
+            if not npc_object.is_alive(): # Use NPC method
                 handle_npc_defeat(npc_id)
             action_taken = True
         elif command == "special":
@@ -1473,10 +1567,10 @@ def process_command(full_command_input):
                     if player.special_cooldowns.get(move_input, 0) == 0:
                         move_details = player.special_moves[move_input]
                         damage = int(player.attack_power * move_details["damage_multiplier"])
-                        npc_data["hp"] -= damage
-                        print(f"You use {move_details['name']} on {npc_data['name']} for {damage} damage!")
+                        npc_object.take_damage(damage) # Use NPC method
+                        print(f"You use {move_details['name']} on {npc_object.name} for {damage} damage!")
                         player.special_cooldowns[move_input] = move_details["cooldown_max"]
-                        if npc_data["hp"] <= 0:
+                        if not npc_object.is_alive(): # Use NPC method
                             handle_npc_defeat(npc_id)
                         action_taken = True
                     else:
@@ -1645,35 +1739,41 @@ def process_command(full_command_input):
         if not args: print("Talk to whom?")
         else:
             npc_name_input = " ".join(args)
-            room_npcs = location_data.get("npcs", {})
-            found_npc_id, npc_data_found = next(((npc_id, data) for npc_id, data in room_npcs.items() if npc_name_input == data["name"].lower() or npc_name_input == npc_id.lower()), (None, None))
+            room_npc_objects = location_data.get("npcs", {}) # This now contains NPC objects
+            found_npc_object = None
+            target_npc_id = None
+            for npc_id_key, npc_obj_val in room_npc_objects.items():
+                if npc_name_input == npc_obj_val.name.lower() or npc_name_input == npc_id_key.lower():
+                    found_npc_object = npc_obj_val
+                    target_npc_id = npc_id_key
+                    break
 
-            if npc_data_found:
-                print(f"\nYou approach {npc_data_found['name']}.")
-                if npc_data_found.get("pre_combat_dialogue") and npc_data_found.get("dialogue_options"):
-                    print(f"{npc_data_found['name']} says: \"{npc_data_found['pre_combat_dialogue']}\"")
-                    player.start_dialogue(found_npc_id, npc_data_found["dialogue_options"]) # Player object's method
-                elif npc_data_found.get("type") == "quest_giver_simple":
-                    if npc_data_found.get("quest_item_needed") in player.inventory:
-                        print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_complete', 'Thank you!')}\"")
-                        game_logic.remove_item_from_player_inventory(player, items_data, npc_data_found["quest_item_needed"], source=f"quest_turn_in_{found_npc_id}", log_event_func=log_game_event)
-                        if npc_data_found.get("quest_reward_item"):
-                            game_logic.award_item_to_player(player, items_data, npc_data_found["quest_reward_item"], source=f"quest_reward_{found_npc_id}", log_event_func=log_game_event)
+            if found_npc_object:
+                print(f"\nYou approach {found_npc_object.name}.")
+                if found_npc_object.pre_combat_dialogue and found_npc_object.dialogue_options:
+                    print(f"{found_npc_object.name} says: \"{found_npc_object.pre_combat_dialogue}\"")
+                    player.start_dialogue(target_npc_id, found_npc_object.dialogue_options)
+                elif found_npc_object.type == "quest_giver_simple":
+                    if found_npc_object.quest_item_needed in player.inventory:
+                        print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue_after_quest_complete or 'Thank you!'}\"")
+                        game_logic.remove_item_from_player_inventory(player, items_data, found_npc_object.quest_item_needed, source=f"quest_turn_in_{target_npc_id}", log_event_func=log_game_event)
+                        if found_npc_object.quest_reward_item:
+                            game_logic.award_item_to_player(player, items_data, found_npc_object.quest_reward_item, source=f"quest_reward_{target_npc_id}", log_event_func=log_game_event)
 
                         # If there's a currency reward for the quest
-                        if npc_data_found.get("quest_reward_currency"):
-                            player.add_coins(npc_data_found["quest_reward_currency"], log_event_func=log_game_event, source=f"quest_reward_{found_npc_id}")
-                            print(f"You are also rewarded with {npc_data_found['quest_reward_currency']} coins.") # Message for terminal
+                        if found_npc_object.quest_reward_currency:
+                            player.add_coins(found_npc_object.quest_reward_currency, log_event_func=log_game_event, source=f"quest_reward_{target_npc_id}")
+                            print(f"You are also rewarded with {found_npc_object.quest_reward_currency} coins.")
                     else:
-                        print(f"{npc_data_found['name']} says: \"{npc_data_found.get('dialogue_after_quest_incomplete', npc_data_found['dialogue'])}\"")
-                elif npc_data_found.get("hostile"): 
-                    print(npc_data_found['dialogue']) 
-                    player.enter_combat(found_npc_id) # Player object's method
-                elif npc_data_found.get("type") == "vendor":
+                        print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue_after_quest_incomplete or found_npc_object.dialogue}\"")
+                elif found_npc_object.hostile:
+                    print(found_npc_object.dialogue)
+                    player.enter_combat(target_npc_id)
+                elif found_npc_object.type == "vendor":
                     print(VENDOR_STALL_VISUAL)
-                    print(f"{npc_data_found['name']} says: \"{npc_data_found['dialogue']}\"")
+                    print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue}\"")
                 else:
-                    print(f"{npc_data_found['name']} says: \"{npc_data_found['dialogue']}\"")
+                    print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue}\"")
             else:
                 print(f"There is no one named '{npc_name_input}' here to talk to.")
     else:

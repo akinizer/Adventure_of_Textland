@@ -40,6 +40,7 @@ class Player:
             "trinket2": None  # New Trinket Slot 2
         }
         self.is_paused = False
+        self.visited_locations = set() # To store IDs of visited locations
 
     def _recalculate_derived_stats(self, items_master_data):
         """Recalculates derived stats based on base stats, class/species, and equipment."""
@@ -85,6 +86,7 @@ class Player:
 
     def move_to(self, new_location_id):
         self.current_location_id = new_location_id
+        self.visited_locations.add(new_location_id) # Record visited location
         # print(f"{self.name} moves to {new_location_id}.")
 
     def take_damage(self, amount):
