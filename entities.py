@@ -202,3 +202,39 @@ class Player:
         self.set_active(False)
         self.end_dialogue()
         self.leave_combat()
+
+# d:\GeneralRepository\PythonProjects\AdventureOfTextland\entities.py
+# ... (Player class above) ...
+
+class NPC:
+    def __init__(self, npc_id, name, description, dialogue="...", npc_type="neutral", hostile=False,
+                 hp=10, max_hp=10, attack_power=1, loot=None,
+                 dialogue_options=None, pre_combat_dialogue=None,
+                 quest_item_needed=None, quest_reward_item=None, dialogue_after_quest_complete=None,
+                 dialogue_after_quest_incomplete=None, quest_reward_currency=0):
+        self.id = npc_id
+        self.name = name
+        self.description = description
+        self.dialogue = dialogue # Default dialogue
+        self.type = npc_type
+        self.hostile = hostile
+        self.hp = hp
+        self.max_hp = max_hp
+        self.attack_power = attack_power
+        self.loot = loot if loot is not None else []
+        self.dialogue_options = dialogue_options if dialogue_options is not None else {}
+        self.pre_combat_dialogue = pre_combat_dialogue
+        # Quest related attributes
+        self.quest_item_needed = quest_item_needed
+        self.quest_reward_item = quest_reward_item
+        self.dialogue_after_quest_complete = dialogue_after_quest_complete
+        self.dialogue_after_quest_incomplete = dialogue_after_quest_incomplete
+        self.quest_reward_currency = quest_reward_currency
+
+    def is_alive(self):
+        return self.hp > 0
+
+    def take_damage(self, amount):
+        self.hp -= amount
+        if self.hp < 0:
+            self.hp = 0

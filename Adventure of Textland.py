@@ -18,7 +18,7 @@ except ImportError:
     flask_available = False
 
 import game_logic # Import our new game logic module
-from entities import Player # Import the Player class
+from entities import Player, NPC # Import the Player and NPC classes
 HOSTILE_MOB_VISUAL = """
   .--""--.
  /        \\
@@ -125,6 +125,24 @@ def load_all_game_data():
     items_data = _load_json_data_from_file("items.json", "Items")
     species_data = _load_json_data_from_file("species.json", "Species")
     classes_data = _load_json_data_from_file("classes.json", "Classes")
+
+    # Convert NPC dictionaries in locations to NPC objects
+    for loc_id, loc_data in locations.items():
+        if "npcs" in loc_data and isinstance(loc_data["npcs"], dict):
+            npc_objects = {}
+            for npc_id, npc_dict_data in loc_data["npcs"].items():
+                # Prepare kwargs for NPC constructor, mapping "type" from JSON to "npc_type"
+                npc_init_kwargs = npc_dict_data.copy() # Start with a copy of the NPC data
+                if "type" in npc_init_kwargs:
+                    npc_init_kwargs["npc_type"] = npc_init_kwargs.pop("type") # Rename key for constructor
+                
+                npc_objects[npc_id] = NPC(
+                    npc_id=npc_id,
+                    **npc_init_kwargs # Unpack the potentially modified kwargs
+                )
+            locations[loc_id]["npcs"] = npc_objects
+        elif "npcs" in loc_data and not isinstance(loc_data["npcs"], dict):
+            print(f"[WARNING] NPCs data for location '{loc_id}' is not a dictionary. Skipping NPC object conversion for this location.")
 
     # Post-load validation/checks (optional but recommended)
     if not locations:
@@ -585,8 +603,12 @@ def run_minimal_web_server():
                 "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
             },
             "interactable_features": [], 
-            "room_items": [], # List of items in the room
+            "room_items": [], 
+            "npcs_in_room": [], # List of NPCs in the room
             "can_save_in_city": False # Default save status
+            # For web UI dialogue state, if you want to show options directly in UI
+            # "dialogue_npc_id": None, 
+            # "dialogue_options_pending": {}, 
         }
 
         if not player.game_active and action not in ['!start']: # Check game_active safely
@@ -753,6 +775,43 @@ def run_minimal_web_server():
             current_loc_id_for_sort = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_sort, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_sort, {}).get("description", "An unfamiliar place.")
+        elif action.startswith('talk '):
+            npc_id_to_talk_to = action.split(' ', 1)[1]
+            current_loc_id = player.current_location_id
+            current_location_data = locations.get(current_loc_id, {})
+            npcs_in_room = current_location_data.get("npcs", {}) # This now contains NPC objects
+            
+            npc_object = npcs_in_room.get(npc_id_to_talk_to)
+
+            if npc_object:
+                game_response["message"] = f"You approach {npc_object.name}.\n"
+                
+                if npc_object.pre_combat_dialogue and npc_object.dialogue_options:
+                    game_response["message"] += f"{npc_object.name} says: \"{npc_object.pre_combat_dialogue}\""
+                    player.start_dialogue(npc_object.id, npc_object.dialogue_options)
+                    # If you want to send dialogue options to UI:
+                    # game_response["dialogue_npc_id"] = player.dialogue_npc_id
+                    # game_response["dialogue_options_pending"] = player.dialogue_options_pending
+                elif npc_object.type == "quest_giver_simple":
+                    if npc_object.quest_item_needed in player.inventory:
+                        game_response["message"] += f"{npc_object.name} says: \"{npc_object.dialogue_after_quest_complete or 'Thank you!'}\""
+                        game_logic.remove_item_from_player_inventory(player, items_data, npc_object.quest_item_needed, source=f"quest_turn_in_web_{npc_object.id}", log_event_func=log_game_event)
+                        if npc_object.quest_reward_item:
+                            reward_msg = game_logic.award_item_to_player(player, items_data, npc_object.quest_reward_item, source=f"quest_reward_web_{npc_object.id}", log_event_func=log_game_event)
+                            game_response["message"] += f"\n{reward_msg}"
+                        if npc_object.quest_reward_currency > 0:
+                            player.add_coins(npc_object.quest_reward_currency, log_event_func=log_game_event, source=f"quest_reward_web_{npc_object.id}")
+                            game_response["message"] += f"\nYou are also rewarded with {npc_object.quest_reward_currency} coins."
+                    else:
+                        game_response["message"] += f"{npc_object.name} says: \"{npc_object.dialogue_after_quest_incomplete or npc_object.dialogue}\""
+                # Add other NPC type interactions (hostile, vendor, standard dialogue) here, similar to process_command
+                else: # Standard dialogue for now
+                    game_response["message"] += f"{npc_object.name} says: \"{npc_object.dialogue}\""
+            else:
+                game_response["message"] = f"You can't find anyone with ID '{npc_id_to_talk_to}' here to talk to." # Changed to ID for clarity
+            
+            game_response["location_name"] = current_location_data.get("name", "Unknown Area")
+            game_response["description"] = current_location_data.get("description", "An unfamiliar place.")
         else:
             game_response["message"] = f"The action '{action}' is not fully implemented or recognized for the browser interface yet."
             # Ensure location details are still sent for unrecognized actions
@@ -797,6 +856,16 @@ def run_minimal_web_server():
             for item_id in room_items_for_response
         ]
         
+        # Populate NPCs in room
+        game_response["npcs_in_room"] = []
+        npcs_for_response = current_location_data_for_response.get("npcs", {})
+        for npc_id, npc_obj in npcs_for_response.items():
+            if npc_obj.is_alive(): # Only list living NPCs
+                game_response["npcs_in_room"].append({
+                    "id": npc_obj.id,
+                    "name": npc_obj.name
+                })
+
         # Always include player stats
         game_response["player_hp"] = player.hp
         game_response["player_max_hp"] = player.max_hp
@@ -906,7 +975,8 @@ def run_minimal_web_server():
                     "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
                 },
                 "interactable_features": [], # Will be populated by final assembly logic
-                "room_items": [] # Will be populated by final assembly logic
+                "room_items": [], # Will be populated by final assembly logic
+                "npcs_in_room": [] # Will be populated
             }
             # Manually populate features and items for the very first response after creation
             current_loc_data = locations.get(start_room_id, {})
@@ -934,6 +1004,14 @@ def run_minimal_web_server():
 
             # Items in the room (should be empty at start, items are in crate)
             # initial_scene_data["room_items"] = [...] 
+            
+            # NPCs in the room for initial scene
+            initial_npcs_in_room = current_loc_data.get("npcs", {})
+            for npc_id, npc_obj in initial_npcs_in_room.items():
+                if npc_obj.is_alive():
+                    initial_scene_data["npcs_in_room"].append({
+                        "id": npc_obj.id, "name": npc_obj.name
+                    })
 
             return jsonify(initial_scene_data)
         else:
@@ -972,7 +1050,8 @@ def run_minimal_web_server():
                     "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
                 },
                 "interactable_features": [],
-                "room_items": []
+                "room_items": [],
+                "npcs_in_room": []
             }
 
             features_in_room = current_loc_data.get("features", {})
@@ -990,6 +1069,13 @@ def run_minimal_web_server():
                 {"id": item_id, "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " "))}
                 for item_id in room_items_list
             ]
+            # NPCs in room for loaded scene
+            loaded_npcs_in_room = current_loc_data.get("npcs", {})
+            for npc_id, npc_obj in loaded_npcs_in_room.items():
+                if npc_obj.is_alive():
+                    loaded_scene_data["npcs_in_room"].append({
+                        "id": npc_obj.id, "name": npc_obj.name
+                    })
             # Populate equipped items for loaded scene
             player_equipment_data_load = player.equipment
             expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "back", "trinket1", "trinket2"]
@@ -1035,7 +1121,8 @@ def run_minimal_web_server():
                     "neck": "Empty", "back": "Empty", "trinket1": "Empty", "trinket2": "Empty"
                 },
                 "interactable_features": [], # Populate these like in process_game_action
-                "room_items": []
+                "room_items": [],
+                "npcs_in_room": []
             }
             # Populate features and items (similar to process_game_action_route's final assembly)
             features_in_room = current_loc_data.get("features", {})
@@ -1048,6 +1135,14 @@ def run_minimal_web_server():
             scene_data["room_items"] = [
                 {"id": item_id, "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " "))}
                 for item_id in room_items_list ]
+            
+            # NPCs in room for resumed scene
+            resumed_npcs_in_room = current_loc_data.get("npcs", {})
+            for npc_id, npc_obj in resumed_npcs_in_room.items():
+                if npc_obj.is_alive():
+                    scene_data["npcs_in_room"].append({
+                        "id": npc_obj.id, "name": npc_obj.name
+                    })
             
             # Populate equipped items for resumed scene
             player_equipment_data_resume = player.equipment

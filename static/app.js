@@ -729,6 +729,41 @@ function displaySceneData(data, actionStringEcho = null) {
 
         // Call the component function to update the Game Actions Panel
         updateGameActionsComponent(data);
+
+        // --- Component: NPC Interactions Panel ---
+        function updateNPCInteractionPanelComponent(npcsData) {
+            const npcPanel = document.getElementById('npc-interactions-panel');
+            if (!npcPanel) return;
+
+            let npcButtonsContainer = npcPanel.querySelector('.dynamic-buttons-container');
+            if (!npcButtonsContainer) {
+                npcButtonsContainer = document.createElement('div');
+                npcButtonsContainer.classList.add('dynamic-buttons-container');
+                const pElement = npcPanel.querySelector('p');
+                if (pElement) {
+                    pElement.insertAdjacentElement('afterend', npcButtonsContainer);
+                } else {
+                    npcPanel.appendChild(npcButtonsContainer);
+                }
+            }
+            npcButtonsContainer.innerHTML = ''; // Clear previous NPC buttons
+
+            if (npcsData && npcsData.length > 0) {
+                npcsData.forEach(npc => {
+                    const npcButton = document.createElement('button');
+                    npcButton.textContent = `Talk to ${npc.name}`;
+                    // Send action "talk <npc_id>" (npc.id should be the unique identifier)
+                    npcButton.onclick = () => performAction(`talk ${npc.id}`); 
+                    npcButtonsContainer.appendChild(npcButton);
+                });
+                npcPanel.style.display = 'block';
+            } else {
+                npcPanel.style.display = 'none';
+            }
+        }
+        // --- End Component: NPC Interactions Panel ---
+        updateNPCInteractionPanelComponent(data.npcs_in_room);
+
 }
 
 // Initial load
