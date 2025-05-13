@@ -386,7 +386,9 @@ def initialize_game_state():
     player.move_to(start_room_id) # Player object's method
     class_info = classes_data[player.class_id]
     if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
-        locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info["starter_items"])
+        crate_contents = list(class_info["starter_items"])
+        crate_contents.append("blank_map_scroll") # Add map scroll to the crate
+        locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = crate_contents
         locations[start_room_id]["features"]["worn_crate"]["closed"] = True 
     
     print(f"You feel a pull towards the {locations[start_room_id]['name']}.")
@@ -519,6 +521,10 @@ def handle_environmental_interaction(feature_id, action_verb):
             feature["contains_on_open"] = [] # Empty the crate's internal list
             feature["closed"] = False
             player.flags["found_starter_items"] = True # Still set this flag
+            if player.current_location_id == "generic_start_room":
+                print("\nThe way out of the chamber seems clear now. You step outside.")
+                player.move_to("eldoria_square") # Move to the defined exit
+                log_game_event("auto_move", {"from": "generic_start_room", "to": "eldoria_square", "reason": "opened_starter_crate_terminal", "player_name": player.name})
     elif chosen_outcome.get("type") == "stat_change" and chosen_outcome.get("stat") == "hp":
         player.heal(chosen_outcome.get("amount", 0)) # Use method
         print(f"Your HP is now {player.hp}/{player.max_hp}.")
@@ -684,6 +690,10 @@ def run_minimal_web_server():
                 crate["contains_on_open"] = [] 
                 crate["closed"] = False
                 player.flags["found_starter_items"] = True
+                if player.current_location_id == "generic_start_room":
+                    player.move_to("eldoria_square") # Move to the defined exit
+                    game_response["message"] += "\nThe way out of the chamber seems clear now. You step outside."
+                    log_game_event("auto_move", {"from": "generic_start_room", "to": "eldoria_square", "reason": "opened_starter_crate_web", "player_name": player.name})
             else:
                 game_response["message"] = "The crate is already open and empty."
         elif action.startswith('unequip '):
@@ -870,7 +880,9 @@ def run_minimal_web_server():
             player.current_location_id = start_room_id
             class_info_for_items = classes_data[player.class_id]
             if start_room_id in locations and "worn_crate" in locations[start_room_id].get("features", {}):
-                locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = list(class_info_for_items["starter_items"])
+                crate_contents_web = list(class_info_for_items["starter_items"])
+                crate_contents_web.append("blank_map_scroll") # Add map scroll to the crate
+                locations[start_room_id]["features"]["worn_crate"]["contains_on_open"] = crate_contents_web
                 locations[start_room_id]["features"]["worn_crate"]["closed"] = True
             
             # Prepare initial scene data for the response

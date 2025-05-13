@@ -22,7 +22,7 @@ def apply_character_choices_and_stats(player_obj, species_id, class_id, char_nam
     # Other initializations
     player_obj.special_moves = dict(class_info.get("special_moves", {}))
     player_obj.special_cooldowns = {move_id: 0 for move_id in player_obj.special_moves}
-    player_obj.inventory = ["simple_knife", "blank_map_scroll"]
+    player_obj.inventory = ["simple_knife"] # Player starts only with a knife directly
     player_obj.coins = 0
     player_obj.level = 1
     player_obj.xp = 0
