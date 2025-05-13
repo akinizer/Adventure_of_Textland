@@ -223,14 +223,29 @@ def list_existing_characters():
                 if os.path.exists(char_file_path):
                     try:
                         with open(char_file_path, 'r') as f:
-                            data = json.load(f)
-                            characters.append({
-                                "display_name": data.get("name", entry.replace("_", " ")), # Use actual name if available
-                                "class": classes_data.get(data.get("class"), {}).get("name", "Unknown"),
-                                "species": species_data.get(data.get("species"), {}).get("name", "Unknown")
-                            })
+                            char_json_data = json.load(f) # Renamed to avoid confusion with global 'data'
+
+                        # Try to get ID using the new keys first, then fallback to potentially older keys
+                        species_id_from_file = char_json_data.get("species_id")
+                        if species_id_from_file is None:
+                            species_id_from_file = char_json_data.get("species") # Fallback
+
+                        class_id_from_file = char_json_data.get("class_id")
+                        if class_id_from_file is None:
+                            class_id_from_file = char_json_data.get("class") # Fallback
+
+                        species_name_display = species_data.get(species_id_from_file, {}).get("name", "Unknown Species")
+                        class_name_display = classes_data.get(class_id_from_file, {}).get("name", "Unknown Class")
+                        character_level_display = char_json_data.get("level", 1) # Default to 1 if not found
+                        
+                        characters.append({
+                            "display_name": char_json_data.get("name", entry.replace("_", " ")), # Use actual name if available
+                            "class": class_name_display,
+                            "species": species_name_display,
+                            "level": character_level_display
+                        })
                     except Exception: # pylint: disable=broad-except
-                        characters.append({"display_name": entry.replace("_", " "), "class": "N/A", "species": "N/A"}) # Fallback
+                        characters.append({"display_name": entry.replace("_", " "), "class": "N/A", "species": "N/A", "level": "N/A"}) # Fallback
     return characters
 
 

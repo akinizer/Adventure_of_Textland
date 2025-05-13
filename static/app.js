@@ -87,7 +87,7 @@ async function showInitialCharacterScreen() {
                 charEntryDiv.style.border = '1px solid #ddd';
                 charEntryDiv.style.borderRadius = '4px';
                 const button = document.createElement('button');
-                button.textContent = `${charData.display_name} ( ${charData.species} ${charData.class} )`;
+                button.textContent = `${charData.display_name} (Lvl ${charData.level} ${charData.species} ${charData.class})`;
                 button.onclick = () => handleLoadCharacter(charData.display_name);
                 charEntryDiv.appendChild(button);
 
