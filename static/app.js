@@ -534,343 +534,424 @@ function showWorldMapInModal(mapData) {
     if (modalOverlay) modalOverlay.id = 'world-map-modal-overlay'; // So toggle can find it
 }
 
+// --- Top-Level Component Update Functions ---
+
+// Helper to ensure panel is in the correct container and has a button div
+function setupPanel(panelId, containerId, panelTitle) {
+    const panel = document.getElementById(panelId);
+    const container = document.getElementById(containerId);
+    if (!panel || !container) return null;
+
+    if (panel.parentNode !== container) { // Move panel if not already in the container
+        container.appendChild(panel);
+    }
+
+    let buttonsContainer = panel.querySelector('.dynamic-buttons-container');
+    if (!buttonsContainer) {
+        buttonsContainer = document.createElement('div');
+        buttonsContainer.classList.add('dynamic-buttons-container');
+        const pElement = panel.querySelector('p'); // Assumes a <p> with the title exists
+        if (pElement) {
+            pElement.insertAdjacentElement('afterend', buttonsContainer);
+        } else { // Fallback if no <p> title, just append
+            const titleP = document.createElement('p');
+            titleP.innerHTML = `<strong>${panelTitle}:</strong>`;
+            panel.insertBefore(titleP, panel.firstChild); // Add title if missing
+            panel.appendChild(buttonsContainer);
+        }
+    }
+    buttonsContainer.innerHTML = ''; // Clear previous buttons
+    return buttonsContainer;
+}
+
+function formatGSBCurrency(totalCopper) {
+    if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
+    if (totalCopper === 0) return "0🟠";
+
+    const COPPER_PER_SILVER = 100;
+    const SILVER_PER_GOLD = 100;
+    const COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
+
+    let gold = Math.floor(totalCopper / COPPER_PER_GOLD);
+    let remainingCopperAfterGold = totalCopper % COPPER_PER_GOLD;
+    let silver = Math.floor(remainingCopperAfterGold / COPPER_PER_SILVER);
+    let copper = remainingCopperAfterGold % COPPER_PER_SILVER;
+
+    let parts = [];
+    if (gold > 0) parts.push(`${gold}🟡`); 
+    if (silver > 0) parts.push(`${silver}🔘`);
+    if (copper > 0 || (gold === 0 && silver === 0)) parts.push(`${copper}🟠`);
+    return parts.length > 0 ? parts.join(' ') : "0🟠";
+}
+
+function updateGameOutputComponent(data, actionStringEcho) {
+    const outputElement = document.getElementById('game-output');
+    // Logic to populate discoveredDeadEnds
+    if (actionStringEcho && actionStringEcho.toLowerCase().startsWith('go ')) {
+        console.log("[DeadEndDebug] 'go' action detected. Echo:", actionStringEcho); //1
+        console.log("[DeadEndDebug] Server message:", data.message); //2
+        console.log("[DeadEndDebug] Location ID from server (data.player_current_location_id):", data.player_current_location_id); //3
+
+        if (data.message && data.message.toLowerCase().startsWith("you can't go")) { // Check #A
+            console.log("[DeadEndDebug] Condition A MET: 'You can't go' message confirmed.");
+            const directionAttempted = actionStringEcho.split(' ')[1].toLowerCase();
+            const locIdFromWhichAttempted = data.player_current_location_id; 
+            
+            if (locIdFromWhichAttempted && directionAttempted) { // Check #B
+                console.log("[DeadEndDebug] Condition B MET: locIdFromWhichAttempted AND directionAttempted are present.");
+                const deadEndKey = `${locIdFromWhichAttempted}_${directionAttempted}`;
+                discoveredDeadEnds[deadEndKey] = true;
+                console.log("[DeadEndDebug] SUCCESS: Discovered dead end:", deadEndKey, "Current dead ends:", JSON.parse(JSON.stringify(discoveredDeadEnds)));
+            } else {
+                console.error("[DeadEndDebug] FAILED Condition B: Missing locIdFromWhichAttempted or directionAttempted. locId:", locIdFromWhichAttempted, "dir:", directionAttempted);
+            }
+        } else {
+            console.log("[DeadEndDebug] FAILED Condition A: Message ('" + data.message + "') did not indicate a blocked 'go' action.");
+        }
+    }
+    if (!outputElement) return;
+
+    outputElement.innerHTML = ''; // Clear previous output
+
+    if (actionStringEcho) {
+        const p_command_echo = document.createElement('p');
+        p_command_echo.innerHTML = `<strong>&gt; ${actionStringEcho}</strong>`;
+        outputElement.appendChild(p_command_echo);
+    }
+    if (data.location_name) {
+        const p_loc_name = document.createElement('p');
+        p_loc_name.innerHTML = `--- ${data.location_name} (HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'}/${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}) ${data.player_name ? '('+data.player_name+')' : ''}`;
+        outputElement.appendChild(p_loc_name);
+    }
+    if (data.description) { 
+        const p_desc = document.createElement('p');
+        p_desc.textContent = data.description;
+        outputElement.appendChild(p_desc);
+    }
+    if (data.message && data.message.trim() !== "") {
+        const p_message = document.createElement('p'); 
+        p_message.textContent = data.message; 
+        outputElement.appendChild(p_message);
+    }
+    if (data.map_lines && Array.isArray(data.map_lines)) { 
+        data.map_lines.forEach(line => {
+            const p_map_line = document.createElement('p');
+            p_map_line.style.whiteSpace = "pre"; 
+            p_map_line.textContent = line;
+            outputElement.appendChild(p_map_line);
+        });
+    }
+    outputElement.scrollTop = outputElement.scrollHeight; // Auto-scroll
+}
+
+function updateFeatureInteractionsComponent(featuresData) {
+    const featurePanel = document.getElementById('feature-interactions-panel');
+    const featureButtonsContainer = setupPanel('feature-interactions-panel', 'action-panels-container', 'Room Features');
+    if (!featureButtonsContainer || !featurePanel) return;
+
+    if (featuresData && featuresData.length > 0) {
+        featuresData.forEach(feature => {
+            const featureButton = document.createElement('button');
+            featureButton.textContent = `${feature.action.charAt(0).toUpperCase() + feature.action.slice(1)} ${feature.name}`;
+            featureButton.onclick = () => performAction(`${feature.action} ${feature.id}`);
+            featureButtonsContainer.appendChild(featureButton);
+        });
+        featurePanel.style.display = 'block';
+    } else {
+        featurePanel.style.display = 'none';
+    }
+}
+
+function updateRoomItemsComponent(itemsData) {
+    const itemsPanel = document.getElementById('room-items-panel');
+    const itemsButtonsContainer = setupPanel('room-items-panel', 'action-panels-container', 'Items on the ground');
+    if (!itemsButtonsContainer || !itemsPanel) return;
+
+    if (itemsData && itemsData.length > 0) {
+        itemsData.forEach(item => {
+            const itemButton = document.createElement('button');
+            itemButton.textContent = `Take ${item.name}`;
+            itemButton.onclick = () => performAction(`take ${item.id}`);
+            itemsButtonsContainer.appendChild(itemButton);
+        });
+        itemsPanel.style.display = 'block';
+    } else {
+        itemsPanel.style.display = 'none';
+    }
+}
+
+function updateDynamicHeaderComponent(headerData) {
+    const headerInfoDiv = document.getElementById('dynamic-header-info');
+    if (!headerInfoDiv) return;
+    headerInfoDiv.textContent = `Location: ${headerData.location_name || 'Unknown'} | Player: ${headerData.player_name || 'Adventurer'} - Level: ${headerData.player_level !== undefined ? headerData.player_level : 'N/A'} (XP: ${headerData.player_xp !== undefined ? headerData.player_xp : 'N/A'}/${headerData.player_xp_to_next_level !== undefined ? headerData.player_xp_to_next_level : 'N/A'}) - Coins: ${formatGSBCurrency(headerData.player_coins)} - Diamond: 0💎`;
+}
+
+function handleUnequipDoubleClick(event) {
+    event.preventDefault(); 
+    const itemId = this.getAttribute('data-item-id');
+    console.log(`Double-clicked equipped item ID: ${itemId}`);
+    if (itemId) performAction(`unequip ${itemId}`);
+}
+
+function updateCharacterPanelComponent(playerData) {
+    const charPanelName = document.getElementById('char-panel-name');
+    const charPanelClass = document.getElementById('char-panel-class');
+    const charPanelSpecies = document.getElementById('char-panel-species');
+    const charPanelLevel = document.getElementById('char-panel-level');
+    const charPanelXp = document.getElementById('char-panel-xp');
+    const charPanelHp = document.getElementById('char-panel-hp');
+    const charPanelAttack = document.getElementById('char-panel-attack');
+    const charPanelCoins = document.getElementById('char-panel-coins');
+    const equipGrid = document.getElementById('char-panel-equipment-grid');
+
+    if (charPanelName) charPanelName.textContent = `Name: ${playerData.player_name || 'N/A'}`;
+    if (charPanelClass) charPanelClass.textContent = `Class: ${playerData.player_class_name || 'N/A'}`;
+    if (charPanelSpecies) charPanelSpecies.textContent = `Species: ${playerData.player_species_name || 'N/A'}`;
+    if (charPanelLevel) charPanelLevel.textContent = `Level: ${playerData.player_level !== undefined ? playerData.player_level : 'N/A'}`;
+    if (charPanelXp) charPanelXp.textContent = `XP: ${playerData.player_xp !== undefined ? playerData.player_xp : 'N/A'} / ${playerData.player_xp_to_next_level !== undefined ? playerData.player_xp_to_next_level : 'N/A'}`;
+    if (charPanelHp) charPanelHp.textContent = `HP: ${playerData.player_hp !== undefined ? playerData.player_hp : 'N/A'} / ${playerData.player_max_hp !== undefined ? playerData.player_max_hp : 'N/A'}`;
+    if (charPanelAttack) charPanelAttack.textContent = `Attack: ${playerData.player_attack_power !== undefined ? playerData.player_attack_power : 'N/A'}`;
+    if (charPanelCoins) charPanelCoins.textContent = `Coins: ${formatGSBCurrency(playerData.player_coins)}`;
+
+    const equipSlots = {
+        head: document.getElementById('char-panel-equip-head'),
+        shoulders: document.getElementById('char-panel-equip-shoulders'),
+        chest: document.getElementById('char-panel-equip-chest'),
+        hands: document.getElementById('char-panel-equip-hands'),
+        legs: document.getElementById('char-panel-equip-legs'),
+        feet: document.getElementById('char-panel-equip-feet'),
+        main_hand: document.getElementById('char-panel-equip-main_hand'),
+        off_hand: document.getElementById('char-panel-equip-off_hand'),
+        neck: document.getElementById('char-panel-equip-neck'),
+        back: document.getElementById('char-panel-equip-back'),
+        trinket1: document.getElementById('char-panel-equip-trinket1'),
+        trinket2: document.getElementById('char-panel-equip-trinket2')
+    };
+    const equipSlotPrefixes = {
+        head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", 
+        main_hand: "MH", off_hand: "OH", neck: "N", back: "B", 
+        trinket1: "T1", trinket2: "T2"
+    };
+
+    for (const slotKey in equipSlots) {
+        if (equipSlots[slotKey]) {
+            const itemName = playerData.player_equipment && playerData.player_equipment[slotKey] ? playerData.player_equipment[slotKey] : 'Empty';
+            const prefix = equipSlotPrefixes[slotKey] || slotKey.substring(0,1).toUpperCase();
+            equipSlots[slotKey].textContent = `${prefix}: ${itemName}`;
+
+            if (playerData.player_equipment && playerData.player_equipment[`${slotKey}_id`]) {
+                 equipSlots[slotKey].setAttribute('data-item-id', playerData.player_equipment[`${slotKey}_id`]);
+                 equipSlots[slotKey].style.borderColor = '#007bff'; 
+            } else {
+                 equipSlots[slotKey].removeAttribute('data-item-id');
+                 equipSlots[slotKey].style.borderColor = '#b0b0b0'; 
+            }
+        }
+    }
+    if (equipGrid) {
+        equipGrid.querySelectorAll('.equip-slot[data-item-id]').forEach(slotElement => {
+            slotElement.removeEventListener('dblclick', handleUnequipDoubleClick); 
+            slotElement.addEventListener('dblclick', handleUnequipDoubleClick);
+        });
+    }
+}
+
+function updateGameActionsComponent(data) {
+    const gameActionsPanel = document.getElementById('game-actions-panel');
+    const buttonsContainer = setupPanel('game-actions-panel', 'action-panels-container', 'Game Actions');
+    if (!buttonsContainer || !gameActionsPanel) return;
+
+    if (data.can_save_in_city) {
+        const saveButton = document.createElement('button');
+        saveButton.textContent = 'Save Game';
+        saveButton.onclick = async () => { 
+            const response = await fetch('/api/save_game_state', { method: 'POST' });
+            const result = await response.json();
+            appendMessageToOutput(result.message); 
+        };
+        buttonsContainer.appendChild(saveButton);
+        gameActionsPanel.style.display = 'block';
+    } else {
+        gameActionsPanel.style.display = 'none';
+    }
+}
+
+function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
+    const modalGridContainer = document.getElementById('modal-backpack-grid');
+    if (!modalGridContainer) return; 
+
+    let gridHTML = '';
+    const totalSlots = 48; 
+    for (let i = 0; i < totalSlots; i++) {
+        if (i < itemsToDisplay.length) {
+            const item = itemsToDisplay[i]; 
+            let slotHTML = `<div class="inventory-slot" title="${item.name}" data-item-id="${item.id}"`;
+            if (item.equip_slot) { 
+                slotHTML += ` style="border-color: #007bff;"`; 
+            }
+            slotHTML += `>${item.name}</div>`;
+            gridHTML += slotHTML;
+        } else {
+            gridHTML += `<div class="inventory-slot">&nbsp;</div>`; 
+        }
+    }
+    modalGridContainer.innerHTML = gridHTML;
+
+    modalGridContainer.querySelectorAll('.inventory-slot[data-item-id]').forEach(slotElement => {
+        slotElement.addEventListener('dblclick', function(event) {
+            event.preventDefault(); 
+            const itemId = this.getAttribute('data-item-id');
+            performAction(`equip ${itemId}`);
+            closeModal(); 
+        });
+    });
+}
+
+function updateInventoryModalComponent(data, actionStringEcho) {
+    if (actionStringEcho === 'inventory') {
+        let sortButtonHTML = `<div style="margin-bottom: 10px;"><button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button></div>`;
+        let inventoryGridHTML = '<div id="modal-backpack-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">';
+
+        if (data.inventory_list && data.inventory_list.length > 0) {
+            inventoryGridHTML += '</div>'; 
+        } else {
+            inventoryGridHTML = "<p>Your inventory is empty.</p>"; 
+        }
+        
+        let modalDisplayContent = sortButtonHTML + inventoryGridHTML;
+        showMenuModal("Backpack", modalDisplayContent, [{text: "Close", action: () => {}}]);
+        
+        if (data.inventory_list && data.inventory_list.length > 0) {
+            renderOrUpdateModalBackpackGrid(data.inventory_list);
+        }
+        if (document.getElementById('game-output') && data.message === "Your inventory is empty.") {
+            data.message = ""; 
+        }
+
+    } else if (actionStringEcho === 'sort_inventory_by_id_action' && data.inventory_list) {
+        const modalGrid = document.getElementById('modal-backpack-grid');
+        if (modalGrid && document.getElementById('custom-modal-overlay')) {
+            renderOrUpdateModalBackpackGrid(data.inventory_list);
+        }
+    }
+}
+
+function updateNPCInteractionPanelComponent(npcsData) {
+    const npcPanel = document.getElementById('npc-interactions-panel');
+    const npcButtonsContainer = setupPanel('npc-interactions-panel', 'action-panels-container', 'People to talk to');
+    if (!npcButtonsContainer || !npcPanel) return;
+
+    if (npcsData && npcsData.length > 0) {
+        npcsData.forEach(npc => {
+            const npcButton = document.createElement('button');
+            npcButton.textContent = `Talk to ${npc.name}`;
+            npcButton.onclick = () => performAction(`talk ${npc.id}`); 
+            npcButtonsContainer.appendChild(npcButton);
+        });
+        npcPanel.style.display = 'block';
+    } else {
+        npcPanel.style.display = 'none';
+    }
+}
+
+function updateExitButtonsComponent(exitDirections) {
+    const exitPanel = document.getElementById('exit-buttons-panel');
+    const buttonsContainer = setupPanel('exit-buttons-panel', 'action-panels-container', 'Go');
+    if (!buttonsContainer || !exitPanel) return;
+
+    if (exitDirections && exitDirections.length > 0) {
+        exitDirections.forEach(direction => {
+            const exitButton = document.createElement('button');
+            const displayText = direction.charAt(0).toUpperCase() + direction.slice(1);
+            exitButton.textContent = `Go ${displayText}`;
+            exitButton.onclick = () => performAction(`go ${direction}`);
+            buttonsContainer.appendChild(exitButton);
+        });
+        exitPanel.style.display = 'block';
+    } else {
+        exitPanel.style.display = 'none';
+    }
+}
+
+function updateZoneMapSidePanel(zoneMapData) {
+    const panel = document.getElementById('zone-map-side-panel');
+    if (!panel) {
+        console.error("Zone map side panel not found!");
+        return;
+    }
+
+    if (!zoneMapData || !zoneMapData.locations || zoneMapData.locations.length === 0) {
+        panel.innerHTML = '<p style="text-align: center; margin-bottom: 5px;"><strong>Zone Map</strong></p><p style="text-align:center;">No map data for this zone.</p>';
+        return;
+    }
+
+    const locations = zoneMapData.locations;
+    const currentLocationId = zoneMapData.current_location_id;
+    const zoneName = zoneMapData.zone_name || "Current Zone";
+
+    let maxX = 0;
+    let maxY = 0;
+    locations.forEach(loc => {
+        if (loc.x > maxX) maxX = loc.x;
+        if (loc.y > maxY) maxY = loc.y;
+    });
+
+    const gridWidth = maxX + 1;
+    const gridHeight = maxY + 1;
+
+    const EMOJI_CURRENT = '📍';
+    const EMOJI_VISITED = '🟩';
+    const EMOJI_UNVISITED_KNOWN = '🟨';
+    const EMOJI_EMPTY = '⬜';
+    const OUTER_BORDER_COLOR = '#777';
+    const NO_BORDER_STYLE = 'none';
+
+    let mapHTML = `<p style="text-align: center; margin-bottom: 5px; font-weight: bold;">Zone: ${zoneName}</p>`;
+    mapHTML += `<table style="margin: 0 auto; border-collapse: collapse; font-size: 1.1em; line-height: 1;">`; // Adjusted font size
+
+    for (let y = 0; y < gridHeight; y++) {
+        mapHTML += '<tr>';
+        for (let x = 0; x < gridWidth; x++) {
+            const locationAtCell = locations.find(loc => loc.x === x && loc.y === y);
+            let cellEmoji = EMOJI_EMPTY;
+            let cellTitle = `(${x},${y})`;
+            let borderStyles = { top: NO_BORDER_STYLE, right: NO_BORDER_STYLE, bottom: NO_BORDER_STYLE, left: NO_BORDER_STYLE };
+
+            if (locationAtCell) {
+                cellTitle = `${locationAtCell.name} (${x},${y})`;
+                if (locationAtCell.exits && Object.keys(locationAtCell.exits).length > 0) { /* ... tooltip ... */ }
+                if (locationAtCell.id === currentLocationId) cellEmoji = EMOJI_CURRENT;
+                else if (locationAtCell.visited) cellEmoji = EMOJI_VISITED;
+                else cellEmoji = EMOJI_UNVISITED_KNOWN;
+
+                if (locationAtCell.visited || locationAtCell.id === currentLocationId) {
+                    if (discoveredDeadEnds[`${locationAtCell.id}_north`]) borderStyles.top = `1px solid ${OUTER_BORDER_COLOR}`;
+                    if (discoveredDeadEnds[`${locationAtCell.id}_east`]) borderStyles.right = `1px solid ${OUTER_BORDER_COLOR}`;
+                    if (discoveredDeadEnds[`${locationAtCell.id}_south`]) borderStyles.bottom = `1px solid ${OUTER_BORDER_COLOR}`;
+                    if (discoveredDeadEnds[`${locationAtCell.id}_west`]) borderStyles.left = `1px solid ${OUTER_BORDER_COLOR}`;
+                } else if (cellEmoji === EMOJI_EMPTY) { 
+                    const faintGrid = '1px solid #f0f0f0'; // Lighter faint grid
+                    borderStyles = { top: faintGrid, right: faintGrid, bottom: faintGrid, left: faintGrid };
+                }
+            }
+            const cellStyle = `padding: 0px; border-top: ${borderStyles.top}; border-right: ${borderStyles.right}; border-bottom: ${borderStyles.bottom}; border-left: ${borderStyles.left}; width: 1.3em; height: 1.3em; text-align: center; vertical-align: middle;`; // Adjusted cell size
+            mapHTML += `<td title="${cellTitle}" style="${cellStyle}">${cellEmoji}</td>`;
+        }
+        mapHTML += '</tr>';
+    }
+    mapHTML += `</table>`;
+    panel.innerHTML = mapHTML;
+}
+
+
+// --- End of Top-Level Component Update Functions ---
+
 function displaySceneData(data, actionStringEcho = null) {
     console.trace("displaySceneData called");
     console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); // Log the data object
     const outputElement = document.getElementById('game-output');
 
-    // Define formatGSBCurrency once at a scope accessible by components
-    function formatGSBCurrency(totalCopper) {
-        if (totalCopper === undefined || totalCopper === null) totalCopper = 0;
-        if (totalCopper === 0) return "0🟠";
-
-        const COPPER_PER_SILVER = 100;
-        const SILVER_PER_GOLD = 100;
-        const COPPER_PER_GOLD = COPPER_PER_SILVER * SILVER_PER_GOLD;
-
-        let gold = Math.floor(totalCopper / COPPER_PER_GOLD);
-        let remainingCopperAfterGold = totalCopper % COPPER_PER_GOLD;
-        let silver = Math.floor(remainingCopperAfterGold / COPPER_PER_SILVER);
-        let copper = remainingCopperAfterGold % COPPER_PER_SILVER;
-
-        let parts = [];
-        if (gold > 0) parts.push(`${gold}🟡`); 
-        if (silver > 0) parts.push(`${silver}🔘`);
-        if (copper > 0 || (gold === 0 && silver === 0)) parts.push(`${copper}🟠`);
-        return parts.length > 0 ? parts.join(' ') : "0🟠";
-    }
-
-    // --- Component: Game Output Area ---
-    function updateGameOutputComponent(data, actionStringEcho) {
-        const outputElement = document.getElementById('game-output');
-        // Logic to populate discoveredDeadEnds
-        if (actionStringEcho && actionStringEcho.toLowerCase().startsWith('go ')) {
-            console.log("[DeadEndDebug] 'go' action detected. Echo:", actionStringEcho); //1
-            console.log("[DeadEndDebug] Server message:", data.message); //2
-            console.log("[DeadEndDebug] Location ID from server (data.player_current_location_id):", data.player_current_location_id); //3
-
-            if (data.message && data.message.toLowerCase().startsWith("you can't go")) { // Check #A
-                console.log("[DeadEndDebug] Condition A MET: 'You can't go' message confirmed.");
-                const directionAttempted = actionStringEcho.split(' ')[1].toLowerCase();
-                const locIdFromWhichAttempted = data.player_current_location_id; 
-                
-                if (locIdFromWhichAttempted && directionAttempted) { // Check #B
-                    console.log("[DeadEndDebug] Condition B MET: locIdFromWhichAttempted AND directionAttempted are present.");
-                    const deadEndKey = `${locIdFromWhichAttempted}_${directionAttempted}`;
-                    discoveredDeadEnds[deadEndKey] = true;
-                    console.log("[DeadEndDebug] SUCCESS: Discovered dead end:", deadEndKey, "Current dead ends:", JSON.parse(JSON.stringify(discoveredDeadEnds)));
-                } else {
-                    console.error("[DeadEndDebug] FAILED Condition B: Missing locIdFromWhichAttempted or directionAttempted. locId:", locIdFromWhichAttempted, "dir:", directionAttempted);
-                }
-            } else {
-                console.log("[DeadEndDebug] FAILED Condition A: Message ('" + data.message + "') did not indicate a blocked 'go' action.");
-            }
-        }
-        if (!outputElement) return;
-
-        outputElement.innerHTML = ''; // Clear previous output
-
-        if (actionStringEcho) {
-            const p_command_echo = document.createElement('p');
-            p_command_echo.innerHTML = `<strong>&gt; ${actionStringEcho}</strong>`;
-            outputElement.appendChild(p_command_echo);
-        }
-        if (data.location_name) {
-            const p_loc_name = document.createElement('p');
-            p_loc_name.innerHTML = `--- ${data.location_name} (HP: ${data.player_hp !== undefined ? data.player_hp : 'N/A'}/${data.player_max_hp !== undefined ? data.player_max_hp : 'N/A'}) ${data.player_name ? '('+data.player_name+')' : ''}`;
-            outputElement.appendChild(p_loc_name);
-        }
-        if (data.description) { 
-            const p_desc = document.createElement('p');
-            p_desc.textContent = data.description;
-            outputElement.appendChild(p_desc);
-        }
-        if (data.message && data.message.trim() !== "") {
-            const p_message = document.createElement('p'); 
-            p_message.textContent = data.message; 
-            outputElement.appendChild(p_message);
-        }
-        if (data.map_lines && Array.isArray(data.map_lines)) { 
-            data.map_lines.forEach(line => {
-                const p_map_line = document.createElement('p');
-                p_map_line.style.whiteSpace = "pre"; 
-                p_map_line.textContent = line;
-                outputElement.appendChild(p_map_line);
-            });
-        }
-        outputElement.scrollTop = outputElement.scrollHeight; // Auto-scroll
-    }
-    // --- End Component: Game Output Area ---
-
-    // --- Component: Feature Interactions Panel ---
-
-    function updateFeatureInteractionsComponent(featuresData) {
-        const featurePanel = document.getElementById('feature-interactions-panel');
-        if (!featurePanel) return;
-
-        // Ensure the panel has a container for buttons, or create one
-        let featureButtonsContainer = featurePanel.querySelector('.dynamic-buttons-container');
-        if (!featureButtonsContainer) {
-            featureButtonsContainer = document.createElement('div');
-            featureButtonsContainer.classList.add('dynamic-buttons-container'); // Add a class for easier selection
-            // Find the paragraph and insert the container after it
-            const pElement = featurePanel.querySelector('p');
-            if (pElement) {
-                pElement.insertAdjacentElement('afterend', featureButtonsContainer);
-            } else {
-                featurePanel.appendChild(featureButtonsContainer); // Fallback if p is not found
-            }
-        }
-        featureButtonsContainer.innerHTML = ''; // Clear previous feature buttons
-
-        if (featuresData && featuresData.length > 0) {
-            featuresData.forEach(feature => {
-                const featureButton = document.createElement('button');
-                // Example: "Open Worn Crate" or "Search Loose Rocks"
-                featureButton.textContent = `${feature.action.charAt(0).toUpperCase() + feature.action.slice(1)} ${feature.name}`;
-                featureButton.onclick = () => performAction(`${feature.action} ${feature.id}`); // e.g., "open worn_crate"
-                featureButtonsContainer.appendChild(featureButton);
-            });
-            featurePanel.style.display = 'block';
-        } else {
-            featurePanel.style.display = 'none';
-        }
-    }
-    // --- End Component: Feature Interactions Panel ---
-
-    // --- Component: Room Items Panel ---
-    function updateRoomItemsComponent(itemsData) {
-        const itemsPanel = document.getElementById('room-items-panel');
-         if (!itemsPanel) return;
-        // Ensure the panel has a container for buttons, or create one
-        let itemsButtonsContainer = itemsPanel.querySelector('.dynamic-buttons-container');
-        if (!itemsButtonsContainer) {
-            itemsButtonsContainer = document.createElement('div');
-            itemsButtonsContainer.classList.add('dynamic-buttons-container'); // Add a class
-             const pElement = itemsPanel.querySelector('p');
-            if (pElement) { pElement.insertAdjacentElement('afterend', itemsButtonsContainer); } else { itemsPanel.appendChild(itemsButtonsContainer); }
-        }
-        itemsButtonsContainer.innerHTML = ''; // Clear previous item buttons
-
-        if (itemsData && itemsData.length > 0) {
-            itemsData.forEach(item => { // item is now {id: "...", name: "..."}
-                const itemButton = document.createElement('button');
-                itemButton.textContent = `Take ${item.name}`;
-                itemButton.onclick = () => performAction(`take ${item.id}`); // Send item_id
-                itemsButtonsContainer.appendChild(itemButton);
-            });
-            itemsPanel.style.display = 'block';
-        } else {
-            itemsPanel.style.display = 'none';
-        }
-    }
-    // --- End Component: Room Items Panel ---
-
-    // --- Component: Dynamic Header ---
-    function updateDynamicHeaderComponent(headerData) {
-        const headerInfoDiv = document.getElementById('dynamic-header-info');
-        if (!headerInfoDiv) return;
-
-        // Now uses the formatGSBCurrency defined at the higher scope
-        headerInfoDiv.textContent = `Location: ${headerData.location_name || 'Unknown'} | Player: ${headerData.player_name || 'Adventurer'} - Level: ${headerData.player_level !== undefined ? headerData.player_level : 'N/A'} (XP: ${headerData.player_xp !== undefined ? headerData.player_xp : 'N/A'}/${headerData.player_xp_to_next_level !== undefined ? headerData.player_xp_to_next_level : 'N/A'}) - Coins: ${formatGSBCurrency(headerData.player_coins)} - Diamond: 0💎`;
-    }
-    // --- End Component: Dynamic Header ---
-
-    // --- Component: Character Panel ---
-    function updateCharacterPanelComponent(playerData) {
-        const charPanelName = document.getElementById('char-panel-name');
-        const charPanelClass = document.getElementById('char-panel-class');
-        const charPanelSpecies = document.getElementById('char-panel-species');
-        const charPanelLevel = document.getElementById('char-panel-level');
-        const charPanelXp = document.getElementById('char-panel-xp');
-        const charPanelHp = document.getElementById('char-panel-hp');
-        const charPanelAttack = document.getElementById('char-panel-attack');
-        const charPanelCoins = document.getElementById('char-panel-coins');
-        const equipGrid = document.getElementById('char-panel-equipment-grid');
-
-        if (charPanelName) charPanelName.textContent = `Name: ${playerData.player_name || 'N/A'}`;
-        if (charPanelClass) charPanelClass.textContent = `Class: ${playerData.player_class_name || 'N/A'}`;
-        if (charPanelSpecies) charPanelSpecies.textContent = `Species: ${playerData.player_species_name || 'N/A'}`;
-        if (charPanelLevel) charPanelLevel.textContent = `Level: ${playerData.player_level !== undefined ? playerData.player_level : 'N/A'}`;
-        if (charPanelXp) charPanelXp.textContent = `XP: ${playerData.player_xp !== undefined ? playerData.player_xp : 'N/A'} / ${playerData.player_xp_to_next_level !== undefined ? playerData.player_xp_to_next_level : 'N/A'}`;
-        if (charPanelHp) charPanelHp.textContent = `HP: ${playerData.player_hp !== undefined ? playerData.player_hp : 'N/A'} / ${playerData.player_max_hp !== undefined ? playerData.player_max_hp : 'N/A'}`;
-        if (charPanelAttack) charPanelAttack.textContent = `Attack: ${playerData.player_attack_power !== undefined ? playerData.player_attack_power : 'N/A'}`;
-        if (charPanelCoins) charPanelCoins.textContent = `Coins: ${formatGSBCurrency(playerData.player_coins)}`;
-
-        const equipSlots = {
-            head: document.getElementById('char-panel-equip-head'),
-            shoulders: document.getElementById('char-panel-equip-shoulders'),
-            chest: document.getElementById('char-panel-equip-chest'),
-            hands: document.getElementById('char-panel-equip-hands'),
-            legs: document.getElementById('char-panel-equip-legs'),
-            feet: document.getElementById('char-panel-equip-feet'),
-            main_hand: document.getElementById('char-panel-equip-main_hand'),
-            off_hand: document.getElementById('char-panel-equip-off_hand'),
-            neck: document.getElementById('char-panel-equip-neck'), // New
-            back: document.getElementById('char-panel-equip-back'),   // New
-            trinket1: document.getElementById('char-panel-equip-trinket1'), // New
-            trinket2: document.getElementById('char-panel-equip-trinket2')  // New
-        };
-        const equipSlotPrefixes = {
-            head: "H", shoulders: "S", chest: "C", hands: "G", legs: "L", feet: "F", 
-            main_hand: "MH", off_hand: "OH", neck: "N", back: "B", 
-            trinket1: "T1", trinket2: "T2" // New
-        };
-
-        for (const slotKey in equipSlots) {
-            if (equipSlots[slotKey]) {
-                const itemName = playerData.player_equipment && playerData.player_equipment[slotKey] ? playerData.player_equipment[slotKey] : 'Empty';
-                const prefix = equipSlotPrefixes[slotKey] || slotKey.substring(0,1).toUpperCase();
-                equipSlots[slotKey].textContent = `${prefix}: ${itemName}`;
-
-                if (playerData.player_equipment && playerData.player_equipment[`${slotKey}_id`]) {
-                     equipSlots[slotKey].setAttribute('data-item-id', playerData.player_equipment[`${slotKey}_id`]);
-                     equipSlots[slotKey].style.borderColor = '#007bff'; 
-                } else {
-                     equipSlots[slotKey].removeAttribute('data-item-id');
-                     equipSlots[slotKey].style.borderColor = '#b0b0b0'; 
-                }
-            }
-        }
-        // Re-attach double-click listeners to equipped slots within this component
-        if (equipGrid) {
-            equipGrid.querySelectorAll('.equip-slot[data-item-id]').forEach(slotElement => {
-                // Remove old listener to prevent duplicates if any, then add new one
-                slotElement.removeEventListener('dblclick', handleUnequipDoubleClick); // Ensure handleUnequipDoubleClick is accessible
-                slotElement.addEventListener('dblclick', handleUnequipDoubleClick);
-            });
-        }
-    }
-    // --- End Component: Character Panel ---
-
-    // --- Component: Game Actions Panel ---
-    function updateGameActionsComponent(data) {
-        const gameActionsPanel = document.getElementById('game-actions-panel');
-        if (!gameActionsPanel) return;
-
-        // Ensure a container for buttons exists, or create one
-        let buttonsContainer = gameActionsPanel.querySelector('.dynamic-buttons-container');
-        if (!buttonsContainer) {
-            buttonsContainer = document.createElement('div');
-            buttonsContainer.classList.add('dynamic-buttons-container');
-            const pElement = gameActionsPanel.querySelector('p'); // Assuming a <p><strong>Game Actions:</strong></p> exists
-            if (pElement) { pElement.insertAdjacentElement('afterend', buttonsContainer); } else { gameActionsPanel.appendChild(buttonsContainer); }
-        }
-        buttonsContainer.innerHTML = ''; // Clear previous buttons
-
-        if (data.can_save_in_city) {
-            const saveButton = document.createElement('button');
-            saveButton.textContent = 'Save Game';
-            saveButton.onclick = async () => { // Make sure this async logic is appropriate here or refactored
-                const response = await fetch('/api/save_game_state', { method: 'POST' });
-                const result = await response.json();
-                appendMessageToOutput(result.message); // appendMessageToOutput needs to be accessible
-            };
-            buttonsContainer.appendChild(saveButton);
-            gameActionsPanel.style.display = 'block';
-        } else {
-            gameActionsPanel.style.display = 'none';
-        }
-    }
-    // --- End Component: Game Actions Panel ---
-
-    // --- Component: Inventory Modal ---
-    function updateInventoryModalComponent(data, actionStringEcho) {
-        if (actionStringEcho === 'inventory') {
-            let sortButtonHTML = `<div style="margin-bottom: 10px;"><button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button></div>`;
-            let inventoryGridHTML = '<div id="modal-backpack-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">';
-
-            if (data.inventory_list && data.inventory_list.length > 0) {
-                inventoryGridHTML += '</div>'; // Close the grid div
-            } else {
-                inventoryGridHTML = "<p>Your inventory is empty.</p>"; // If empty, replace grid with message
-            }
-            
-            let modalDisplayContent = sortButtonHTML + inventoryGridHTML;
-            showMenuModal("Backpack", modalDisplayContent, [{text: "Close", action: () => {}}]);
-            
-            // Populate the grid if inventory_list is available and not empty
-            if (data.inventory_list && data.inventory_list.length > 0) {
-                renderOrUpdateModalBackpackGrid(data.inventory_list);
-            }
-            // Clear any default message like "Your inventory is empty" from main output if modal is shown
-            if (document.getElementById('game-output') && data.message === "Your inventory is empty.") {
-                data.message = ""; // This might need careful handling if message is also used by game output component
-            }
-
-        } else if (actionStringEcho === 'sort_inventory_by_id_action' && data.inventory_list) {
-            const modalGrid = document.getElementById('modal-backpack-grid');
-            // Check if the modal is actually visible (custom-modal-overlay exists)
-            if (modalGrid && document.getElementById('custom-modal-overlay')) {
-                renderOrUpdateModalBackpackGrid(data.inventory_list);
-            }
-        }
-    }
-    // --- End Component: Inventory Modal ---
-
-    // Helper function to render or update the backpack grid within the modal
-    function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
-        const modalGridContainer = document.getElementById('modal-backpack-grid');
-        if (!modalGridContainer) return; // Modal or grid not found
-
-        let gridHTML = '';
-        const totalSlots = 48; // 6 rows * 8 columns
-        for (let i = 0; i < totalSlots; i++) {
-            if (i < itemsToDisplay.length) {
-                const item = itemsToDisplay[i]; // item is an object {id, name, type, equip_slot}
-                let slotHTML = `<div class="inventory-slot" title="${item.name}" data-item-id="${item.id}"`;
-                if (item.equip_slot) { // Mark equippable items visually
-                    slotHTML += ` style="border-color: #007bff;"`; // Example: blue border for equippable
-                }
-                slotHTML += `>${item.name}</div>`;
-                gridHTML += slotHTML;
-            } else {
-                gridHTML += `<div class="inventory-slot">&nbsp;</div>`; // Empty slot
-            }
-        }
-        modalGridContainer.innerHTML = gridHTML;
-
-        // Re-attach double-click listeners to the newly rendered items in the modal
-        modalGridContainer.querySelectorAll('.inventory-slot[data-item-id]').forEach(slotElement => {
-            slotElement.addEventListener('dblclick', function(event) {
-                event.preventDefault(); 
-                const itemId = this.getAttribute('data-item-id');
-                performAction(`equip ${itemId}`);
-                closeModal(); 
-            });
-        });
-    }
-
-    // Define the unequip double-click handler function within displaySceneData scope
-    // This needs to be accessible by updateCharacterPanelComponent
-    function handleUnequipDoubleClick(event) {
-        event.preventDefault(); 
-        const itemId = this.getAttribute('data-item-id');
-        // const slotKey = this.getAttribute('data-slot-key'); // slotKey is on the element itself
-        console.log(`Double-clicked equipped item ID: ${itemId}`);
-        if (itemId) performAction(`unequip ${itemId}`);
-    }
-
+    // Call the top-level component update functions
         updateInventoryModalComponent(data, actionStringEcho);
         updateGameOutputComponent(data, actionStringEcho);
 
@@ -886,40 +967,11 @@ function displaySceneData(data, actionStringEcho = null) {
 
         // Call the component function to update the Game Actions Panel
         updateGameActionsComponent(data);
+        updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
+        updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
 
-        // --- Component: NPC Interactions Panel ---
-        function updateNPCInteractionPanelComponent(npcsData) {
-            const npcPanel = document.getElementById('npc-interactions-panel');
-            if (!npcPanel) return;
-
-            let npcButtonsContainer = npcPanel.querySelector('.dynamic-buttons-container');
-            if (!npcButtonsContainer) {
-                npcButtonsContainer = document.createElement('div');
-                npcButtonsContainer.classList.add('dynamic-buttons-container');
-                const pElement = npcPanel.querySelector('p');
-                if (pElement) {
-                    pElement.insertAdjacentElement('afterend', npcButtonsContainer);
-                } else {
-                    npcPanel.appendChild(npcButtonsContainer);
-                }
-            }
-            npcButtonsContainer.innerHTML = ''; // Clear previous NPC buttons
-
-            if (npcsData && npcsData.length > 0) {
-                npcsData.forEach(npc => {
-                    const npcButton = document.createElement('button');
-                    npcButton.textContent = `Talk to ${npc.name}`;
-                    // Send action "talk <npc_id>" (npc.id should be the unique identifier)
-                    npcButton.onclick = () => performAction(`talk ${npc.id}`); 
-                    npcButtonsContainer.appendChild(npcButton);
-                });
-                npcPanel.style.display = 'block';
-            } else {
-                npcPanel.style.display = 'none';
-            }
-        }
-        // --- End Component: NPC Interactions Panel ---
-        updateNPCInteractionPanelComponent(data.npcs_in_room);
+        // --- Component: Zone Map Side Panel ---
+        updateZoneMapSidePanel(data.current_zone_map_data);
 }
 
 // Initial load

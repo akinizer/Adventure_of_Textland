@@ -637,8 +637,10 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             "interactable_features": [], 
             "room_items": [], 
             "npcs_in_room": [], # List of NPCs in the room
-            "can_save_in_city": False # Default save status
-            # For web UI dialogue state, if you want to show options directly in UI
+                "can_save_in_city": False, 
+                "available_exits": [], # For dynamic go buttons
+                "current_zone_map_data": None, # Initialize for the side panel zone map
+                "available_exits": [] # For dynamic go buttons
             # "dialogue_npc_id": None, 
             # "dialogue_options_pending": {}, 
         }
@@ -904,6 +906,15 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                     "id": npc_obj.id,
                     "name": npc_obj.name
                 })
+        
+        # Populate available exits
+        game_response["available_exits"] = list(current_location_data_for_response.get("exits", {}).keys())
+
+        # Populate current zone map data for the side panel
+        game_response["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
+
+        # Populate current zone map data for the side panel
+        game_response["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
 
         # Always include player stats
         game_response["player_hp"] = player.hp
@@ -1015,7 +1026,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 },
                 "interactable_features": [], # Will be populated by final assembly logic
                 "room_items": [], # Will be populated by final assembly logic
-                "npcs_in_room": [] # Will be populated
+                "npcs_in_room": [], # Will be populated
+                "current_zone_map_data": None # Initialize
             }
             # Manually populate features and items for the very first response after creation
             current_loc_data = locations.get(start_room_id, {})
@@ -1051,6 +1063,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                     initial_scene_data["npcs_in_room"].append({
                         "id": npc_obj.id, "name": npc_obj.name
                     })
+            # Add zone map data for initial scene
+            initial_scene_data["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
 
             return jsonify(initial_scene_data)
         else:
@@ -1090,7 +1104,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 },
                 "interactable_features": [],
                 "room_items": [],
-                "npcs_in_room": []
+                "npcs_in_room": [],
+                "current_zone_map_data": None # Initialize
             }
 
             features_in_room = current_loc_data.get("features", {})
@@ -1115,6 +1130,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                     loaded_scene_data["npcs_in_room"].append({
                         "id": npc_obj.id, "name": npc_obj.name
                     })
+            # Add zone map data for loaded scene
+            loaded_scene_data["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
             # Populate equipped items for loaded scene
             player_equipment_data_load = player.equipment
             expected_slots_load = ["head", "shoulders", "chest", "hands", "legs", "feet", "main_hand", "off_hand", "neck", "back", "trinket1", "trinket2"]
@@ -1161,7 +1178,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 },
                 "interactable_features": [], # Populate these like in process_game_action
                 "room_items": [],
-                "npcs_in_room": []
+                "npcs_in_room": [],
+                "current_zone_map_data": None # Initialize
             }
             # Populate features and items (similar to process_game_action_route's final assembly)
             features_in_room = current_loc_data.get("features", {})
@@ -1182,6 +1200,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                     scene_data["npcs_in_room"].append({
                         "id": npc_obj.id, "name": npc_obj.name
                     })
+            # Add zone map data for resumed scene
+            scene_data["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
             
             # Populate equipped items for resumed scene
             player_equipment_data_resume = player.equipment
@@ -1426,19 +1446,27 @@ def get_world_map_data_for_api(player_visited_locations, all_locations_data):
     Returns a list of zones, each containing a list of location info.
     """
     # Send a flat list of locations with coordinates, visited status, and current location
+    # Determine player's current zone
+    current_zone_name = "Unknown Zone"
+    if player and player.game_active and player.current_location_id in all_locations_data:
+        current_zone_name = all_locations_data[player.current_location_id].get("zone", "Uncharted Territories")
+
     map_locations = []
     for loc_id, loc_data in all_locations_data.items():
-        if "map_x" in loc_data and "map_y" in loc_data: # Only include locations with map coordinates
+        # Filter by current zone and ensure map coordinates exist
+        if loc_data.get("zone") == current_zone_name and \
+           "map_x" in loc_data and "map_y" in loc_data:
             map_locations.append({
                 "id": loc_id,
                 "name": loc_data.get("name", loc_id),
                 "x": loc_data["map_x"],
                 "y": loc_data["map_y"],
                 "visited": loc_id in player_visited_locations,
-                "exits": loc_data.get("exits", {}) # Send the whole exits object {direction: target_loc_id}
+                "exits": loc_data.get("exits", {})
             })
     
     return {
+        "zone_name": current_zone_name,
         "locations": map_locations,
         "current_location_id": player.current_location_id if player and player.game_active else None
     }

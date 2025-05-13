@@ -19,65 +19,70 @@
             <div id="dynamic-header-info" style="padding: 5px; margin-bottom: 5px; border: 1px solid #ccc; font-weight: bold; background-color: #e9ecef;">
                 <!-- Dynamic header will be populated here by JS -->
             </div>
-            <div id="main-game-content-area" style="display: flex; margin-bottom: 10px;">
-                <div id="character-panel" style="width: 250px; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9; height: 322px; /* Match output-area height */ overflow-y: auto; margin-right: 10px;">
-                    <h4 style="margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Character</h4>
-                    <div id="char-panel-stats" style="margin-bottom: 15px;">
-                        <div id="char-panel-name">Name: N/A</div>
-                        <div id="char-panel-class">Class: N/A</div>
-                        <div id="char-panel-species">Species: N/A</div>
-                        <div id="char-panel-level">Level: N/A</div>
-                        <div id="char-panel-xp">XP: N/A / N/A</div>
-                        <div id="char-panel-hp">HP: N/A / N/A</div>
-                        <div id="char-panel-attack">Attack: N/A</div>
-                        <div id="char-panel-coins">Coins: N/A</div>
-                    </div>
-                    <h5 style="margin-bottom: 5px; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 3px;">Equipment</h5>
-                    <div id="char-panel-equipment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em;">
-                        <div id="char-panel-equip-head" class="equip-slot" title="Head" data-slot-key="head">H: Empty</div>
-                        <div id="char-panel-equip-shoulders" class="equip-slot" title="Shoulders" data-slot-key="shoulders">S: Empty</div>
-                        <div id="char-panel-equip-chest" class="equip-slot" title="Chest" data-slot-key="chest">C: Empty</div>
-                        <div id="char-panel-equip-hands" class="equip-slot" title="Hands" data-slot-key="hands">G: Empty</div>
-                        <div id="char-panel-equip-legs" class="equip-slot" title="Legs" data-slot-key="legs">L: Empty</div>
-                        <div id="char-panel-equip-feet" class="equip-slot" title="Feet" data-slot-key="feet">F: Empty</div>
-                        <div id="char-panel-equip-main_hand" class="equip-slot" title="Main Hand" data-slot-key="main_hand">MH: Empty</div>
-                        <div id="char-panel-equip-off_hand" class="equip-slot" title="Off-Hand" data-slot-key="off_hand">OH: Empty</div>
-                        <div id="char-panel-equip-neck" class="equip-slot" title="Neck" data-slot-key="neck">N: Empty</div>
-                        <div id="char-panel-equip-back" class="equip-slot" title="Back" data-slot-key="back">B: Empty</div>
-                        <div id="char-panel-equip-trinket1" class="equip-slot" title="Trinket 1" data-slot-key="trinket1">T1: Empty</div>
-                        <div id="char-panel-equip-trinket2" class="equip-slot" title="Trinket 2" data-slot-key="trinket2">T2: Empty</div>
-                    </div>
 
-
+            <div id="main-content-wrapper" style="display: flex; flex-direction: row; gap: 15px; margin-bottom: 10px;">
+                <div id="left-column-content" style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
+                    <div id="top-left-row" style="display: flex; flex-direction: row; gap: 10px;">
+                        <div id="character-panel" style="width: 250px; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9; height: 322px; /* Match output-area height */ overflow-y: auto;">
+                            <h4 style="margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Character</h4>
+                            <div id="char-panel-stats" style="margin-bottom: 15px;">
+                                <div id="char-panel-name">Name: N/A</div>
+                                <div id="char-panel-class">Class: N/A</div>
+                                <div id="char-panel-species">Species: N/A</div>
+                                <div id="char-panel-level">Level: N/A</div>
+                                <div id="char-panel-xp">XP: N/A / N/A</div>
+                                <div id="char-panel-hp">HP: N/A / N/A</div>
+                                <div id="char-panel-attack">Attack: N/A</div>
+                                <div id="char-panel-coins">Coins: N/A</div>
+                            </div>
+                            <h5 style="margin-bottom: 5px; margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 3px;">Equipment</h5>
+                            <div id="char-panel-equipment-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.9em;">
+                                <div id="char-panel-equip-head" class="equip-slot" title="Head" data-slot-key="head">H: Empty</div>
+                                <div id="char-panel-equip-shoulders" class="equip-slot" title="Shoulders" data-slot-key="shoulders">S: Empty</div>
+                                <div id="char-panel-equip-chest" class="equip-slot" title="Chest" data-slot-key="chest">C: Empty</div>
+                                <div id="char-panel-equip-hands" class="equip-slot" title="Hands" data-slot-key="hands">G: Empty</div>
+                                <div id="char-panel-equip-legs" class="equip-slot" title="Legs" data-slot-key="legs">L: Empty</div>
+                                <div id="char-panel-equip-feet" class="equip-slot" title="Feet" data-slot-key="feet">F: Empty</div>
+                                <div id="char-panel-equip-main_hand" class="equip-slot" title="Main Hand" data-slot-key="main_hand">MH: Empty</div>
+                                <div id="char-panel-equip-off_hand" class="equip-slot" title="Off-Hand" data-slot-key="off_hand">OH: Empty</div>
+                                <div id="char-panel-equip-neck" class="equip-slot" title="Neck" data-slot-key="neck">N: Empty</div>
+                                <div id="char-panel-equip-back" class="equip-slot" title="Back" data-slot-key="back">B: Empty</div>
+                                <div id="char-panel-equip-trinket1" class="equip-slot" title="Trinket 1" data-slot-key="trinket1">T1: Empty</div>
+                                <div id="char-panel-equip-trinket2" class="equip-slot" title="Trinket 2" data-slot-key="trinket2">T2: Empty</div>
+                            </div>
+                        </div>
+                        <div id="game-output-area" style="flex-grow: 1; display: flex; flex-direction: column;">
+                            <div id="game-output" class="output-area" style="flex-grow: 1;">
+                                <!-- Game messages will appear here -->
+                            </div>
+                            <input type="text" id="player-input" placeholder="Type command..." style="margin-top: 5px;">
+                        </div>
+                    </div>
+                    <div id="action-panels-container" style="display: flex; flex-direction: column; gap: 10px; margin-top:10px;">
+                        <!-- Dynamic action panels (features, items, NPCs, exits) will be appended here by JS -->
+                    </div>
                 </div>
-                <div id="game-output" class="output-area" style="flex-grow: 1;">
-                    <!-- Game messages will appear here -->
+                <div id="zone-map-side-panel" style="flex: 1; border: 1px solid #ccc; padding: 10px; min-width: 250px; max-height: 60vh; overflow-y: auto; background-color: #f9f9f9;">
+                    <!-- Zone map emoji grid will be rendered here by JavaScript -->
                 </div>
             </div>
             <div class="actions-panel">
                 <p><strong>Common Actions:</strong></p>
                 <button onclick="performAction('inventory')">Check Inventory</button>
-                <button onclick="performAction('!map')">View Map</button>
+                <button onclick="performAction('!map')">View World Map</button>
             </div>
-            <div id="game-actions-panel" class="actions-panel" style="display: none;">
+             <div id="game-actions-panel" class="actions-panel" style="display: none;"> <!-- This panel is for dynamic buttons like 'Save Game' -->
                 <p><strong>Game Actions:</strong></p>
                 <!-- Save button will go here -->
             </div>
-            <div class="actions-panel">
-                <p><strong>Movement:</strong> (Would show available directions)</p>
-                <button onclick="performAction('go north')">Go North</button>
-                <button onclick="performAction('go south')">Go South</button>
-                <button onclick="performAction('go east')">Go East</button>
-                <button onclick="performAction('go west')">Go West</button>
-            </div>
-            <div class="actions-panel dynamic-options">
-                <p><strong>Interactions:</strong> (Would show available items/NPCs/features)</p>
-                <button onclick="performAction('talk <npc_example>')">Talk to NPC</button>
-                <button onclick="performAction('use <item> on <feature>')">Use Item On...</button>
-            </div>
             <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
         </div>
-        <div id="feature-interactions-panel" class="actions-panel" style="display: none;">
+        <!-- Dynamic Action Panels - These will be MOVED into #action-panels-container by JavaScript -->
+        <div id="exit-buttons-panel" class="actions-panel" style="display: none;">
+            <p><strong>Go:</strong></p>
+            <!-- Dynamic exit buttons will go here, managed by app.js -->
+        </div>
+        <div id="feature-interactions-panel" class="actions-panel" style="display: none;"> 
             <p><strong>Room Features:</strong></p>
             <!-- Dynamic feature buttons will go here -->
         </div>
@@ -89,6 +94,7 @@
             <p><strong>People to talk to:</strong></p>
             <!-- Dynamic NPC buttons will go here -->
         </div>
+        <!-- End of Dynamic Action Panels -->
         <div id="pause-overlay">PAUSED</div>
     </div>
     <script>const MAX_NAME_LENGTH = {{ max_name_length }};</script>
