@@ -57,7 +57,6 @@ classes_data = {}
 # Initialize player as an instance of the Player class
 player = Player()
 
-PLAYER_LOGS_DIR = "player_data"
 MAX_NAME_LENGTH = 20
 CITY_ZONES = ["Eldoria", "Riverford"] # Zones considered as cities for saving
 # Stricter pattern for humanoid names: only letters, spaces, hyphens, apostrophes.
@@ -535,7 +534,7 @@ def handle_environmental_interaction(feature_id, action_verb):
                     game_logic.award_item_to_player(player, items_data, item_id, source=f"opened_{feature_id}", log_event_func=log_game_event)
                     # acquired_item_names.append(items_data.get(item_id, {}).get("name", item_id)) # Not strictly needed if award_item prints
                 
-                if player["current_location_id"] == "generic_start_room": # Specific message for starter crate
+                if player.current_location_id == "generic_start_room": # Specific message for starter crate
                      print("Among the items, you see a map of a nearby settlement and a small pouch of coins.") # Message adjusted
                 # Log the contents revealed from the crate
                 # This log_game_event call is already good for "player opens chest filled with..."
@@ -695,17 +694,14 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             else:
                 game_response["message"] = "Your inventory is empty."
         elif action == '!map':
-            loc_id = player.current_location_id
-            if loc_id and loc_id in locations:
-                map_data_lines = draw_zone_map(loc_id) 
-                game_response["map_lines"] = map_data_lines 
-                game_response["message"] = "Map information:"
-                game_response["location_name"] = locations[loc_id].get("name", "Unknown Area") # Also send current loc
-                game_response["description"] = locations[loc_id].get("description", "An unfamiliar place.")
-            else:
-                game_response["message"] = "Cannot display map: Current location is unknown or invalid."
-                game_response["location_name"] = "Unknown Area"
-                game_response["description"] = "You are lost and cannot see a map."
+            # The draw_zone_map function now prints directly to terminal.
+            # For the web UI, the zone map is in the side panel.
+            # This command in the web input field can just acknowledge.
+            game_response["message"] = "Zone map is displayed in the side panel. Use 'View World Map (Modal)' for a larger view."
+            current_loc_id_for_map_ack = player.current_location_id
+            current_location_data_for_map_ack = locations.get(current_loc_id_for_map_ack, {})
+            game_response["location_name"] = current_location_data_for_map_ack.get("name", "Unknown Area")
+            game_response["description"] = current_location_data_for_map_ack.get("description", "An unfamiliar place.")
         elif action.startswith('take '):
             item_id_to_take = action.split(' ', 1)[1]
             current_loc_id = player.current_location_id
@@ -909,9 +905,6 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
         
         # Populate available exits
         game_response["available_exits"] = list(current_location_data_for_response.get("exits", {}).keys())
-
-        # Populate current zone map data for the side panel
-        game_response["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
 
         # Populate current zone map data for the side panel
         game_response["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations)
@@ -1445,7 +1438,7 @@ def get_world_map_data_for_api(player_visited_locations, all_locations_data):
     Prepares world map data structured for API response.
     Returns a list of zones, each containing a list of location info.
     """
-    # Send a flat list of locations with coordinates, visited status, and current location
+    # Send a flat list of ALL locations with coordinates, visited status, and current location
     # Determine player's current zone
     current_zone_name = "Unknown Zone"
     if player and player.game_active and player.current_location_id in all_locations_data:
@@ -1453,9 +1446,7 @@ def get_world_map_data_for_api(player_visited_locations, all_locations_data):
 
     map_locations = []
     for loc_id, loc_data in all_locations_data.items():
-        # Filter by current zone and ensure map coordinates exist
-        if loc_data.get("zone") == current_zone_name and \
-           "map_x" in loc_data and "map_y" in loc_data:
+        if "map_x" in loc_data and "map_y" in loc_data: # Include ALL locations with map coordinates
             map_locations.append({
                 "id": loc_id,
                 "name": loc_data.get("name", loc_id),
@@ -1472,45 +1463,78 @@ def get_world_map_data_for_api(player_visited_locations, all_locations_data):
     }
 
 
-def draw_zone_map(current_loc_id):
-    """Draws or lists locations in the current zone and returns them as a list of strings."""
-    map_output_lines = [] 
-    current_zone = locations[current_loc_id].get("zone")
-    if not current_zone:
-        map_output_lines.append("This area is uncharted (no zone data).")
-        return map_output_lines 
+def draw_zone_map(current_loc_id, all_locs_data): # Ensure all_locs_data is used
+    """
+    Draws a textual map of the current zone in the terminal.
+    Includes visited locations, the current location, and unvisited but known locations.
+    Also lists available exits.
+    """
+    if not current_loc_id:
+        print("Current location unknown, cannot draw map.")
+        return
+    current_location_data = all_locs_data.get(current_loc_id, {})
+    current_zone_name = current_location_data.get("zone")
 
-    if current_zone in zone_layouts:
-        layout = zone_layouts[current_zone]
-        map_output_lines.append(f"--- {layout['title']} ---")
-        map_grid_lines = [list(line) for line in layout["grid"]]
-        mapped_loc_ids = {char: loc_id for char, loc_id in layout["mapping"].items()}
+    if not current_zone_name:
+        print("This area is uncharted (no zone data).")
+        return
 
-        for r_idx, row_str in enumerate(layout["grid"]):
-            for c_idx, char_in_grid in enumerate(row_str):
-                if char_in_grid in mapped_loc_ids:
-                    loc_id_at_char = mapped_loc_ids[char_in_grid]
-                    if loc_id_at_char == current_loc_id:
-                        if c_idx > 0 and c_idx < len(row_str) -1 and \
-                           map_grid_lines[r_idx][c_idx-1] == '[' and \
-                           map_grid_lines[r_idx][c_idx+1] == ']':
-                             map_grid_lines[r_idx][c_idx] = '@'
-        
-        for row_list in map_grid_lines:
-            map_output_lines.append("".join(row_list))
-        map_output_lines.append("") 
-        map_output_lines.append("@ - You are here")
-        map_output_lines.append("Other symbols represent locations.")
-    else:
-        map_output_lines.append(f"--- Area: {current_zone} ---")
-        map_output_lines.append("Locations in this area:")
-        zone_locs = [f"  - {data['name']}{' (You are here)' if loc_id == current_loc_id else ''}" 
-                     for loc_id, data in locations.items() if data.get("zone") == current_zone]
-        if zone_locs:
-            map_output_lines.extend(zone_locs)
+    zone_locations = []
+    min_x, max_x, min_y, max_y = float('inf'), float('-inf'), float('inf'), float('-inf')
+
+    for loc_id, loc_data in all_locs_data.items():
+        if loc_data.get("zone") == current_zone_name and "map_x" in loc_data and "map_y" in loc_data:
+            x, y = loc_data["map_x"], loc_data["map_y"]
+            zone_locations.append({
+                "id": loc_id, "name": loc_data.get("name", loc_id),
+                "x": x, "y": y,
+                "visited": loc_id in player.visited_locations
+            })
+            min_x, max_x = min(min_x, x), max(max_x, x)
+            min_y, max_y = min(min_y, y), max(max_y, y)
+
+    if not zone_locations:
+        print(f"No locations with map coordinates found in zone: {current_zone_name}")
+        return
+
+    # Create a grid for the map
+    grid_width = max_x - min_x + 1
+    grid_height = max_y - min_y + 1
+    # Initialize grid with a placeholder for empty space (e.g., a period)
+    grid = [['.' for _ in range(grid_width)] for _ in range(grid_height)]
+
+    # Populate the grid
+    for loc in zone_locations:
+        # Adjust coordinates to be 0-indexed for the grid
+        grid_x, grid_y = loc["x"] - min_x, loc["y"] - min_y
+        if loc["id"] == current_loc_id:
+            grid[grid_y][grid_x] = '@'  # Current location
+        elif loc["visited"]:
+            grid[grid_y][grid_x] = 'V'  # Visited
         else:
-            map_output_lines.append("  (No specific locations marked for this area map.)")
-    return map_output_lines
+            grid[grid_y][grid_x] = '?'  # Known but not visited (or unvisited)
+
+    # Print the map
+    print(f"\n--- Map of {current_zone_name} ---")
+    for row in grid:
+        print(" ".join(row))
+    
+    print("\nLegend: @ Current, V Visited, ? Known, . Empty")
+    print(f"Current Zone: {current_zone_name}")
+
+    # Display available exits from the current location
+    current_exits = current_location_data.get("exits")
+    if current_exits:
+        print("\nAvailable Exits:")
+        for direction, dest_id in current_exits.items():
+            # Optional: print destination name if desired
+            # dest_name = all_locs_data.get(dest_id, {}).get('name', 'an unknown area')
+            # print(f"  - Go {direction.capitalize()} (to {dest_name})")
+            print(f"  - Go {direction.capitalize()}")
+
+    else:
+        print("\nNo obvious exits from here.")
+
 
 
 def process_command(full_command_input):
@@ -1531,7 +1555,7 @@ def process_command(full_command_input):
     elif command == "!save":
         if not player.game_active:
             print("Game not active. Cannot save.")
-            return True
+            return True # Command processed, show scene again
         current_zone = locations[player.current_location_id].get("zone")
         if current_zone in CITY_ZONES:
             save_player_data(player, reason_for_save="Game progress manually saved")

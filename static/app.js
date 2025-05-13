@@ -9,9 +9,10 @@ const SESSION_STORAGE_CHAR_NAME_KEY = 'textRpgCharacterName';
 
  // Centralized pause/resume logic
 function togglePauseGame() {
-    // If modal is visible and related to pause, this call is to resume.
-    // Otherwise, this call is to pause.
-    if (gameIsPaused && document.getElementById('custom-modal-overlay') && document.getElementById('custom-modal-overlay').querySelector('h3').textContent === "Game Paused") {
+    const modalOverlay = document.getElementById('custom-modal-overlay');
+    const modalTitleElement = modalOverlay ? modalOverlay.querySelector('h3') : null;
+
+    if (gameIsPaused && modalTitleElement && modalTitleElement.textContent === "Game Paused") {
         // Resuming game
         gameIsPaused = false;
         console.log("Game Resumed");
@@ -39,7 +40,7 @@ function showMenuModal(title, message, buttonsConfig) {
         <div id="custom-modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
             <div id="custom-modal-content" style="background-color: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.25); text-align: center;">
                 <h3>${title}</h3>
-                <p>${message}</p>
+                <div class="modal-message-content">${message}</div> <!-- Changed <p> to <div> -->
                 <div>${buttonsHTML}</div>
             </div>
         </div>`;
@@ -117,8 +118,11 @@ async function showInitialCharacterScreen() {
 
     } catch (error) {
         console.error("Error occurred in showInitialCharacterScreen while fetching or processing characters:", error);
+        const errorMessage = `Error loading character list: ${error.message || error}`;
         if (charOptionsDiv) { // Ensure charOptionsDiv was found before trying to modify it
-            charOptionsDiv.innerHTML = `<p>Error loading character list: ${error.message || error}. <button onclick="loadSpecies()">Create New Character</button></p>`;
+            charOptionsDiv.innerHTML = `<p>${errorMessage}. <button onclick="loadSpecies()">Create New Character</button></p>`;
+        } else if (creationArea) {
+            creationArea.innerHTML = `<h2>Error Displaying Character List</h2><p>${errorMessage}. You can try to <button onclick="loadSpecies()">Create New Character</button>.</p>`;
         } else {
             creationArea.innerHTML = `<h2>Error Displaying Character List</h2><p>A problem occurred. Please check the browser console for details. You can try to <button onclick="loadSpecies()">Create New Character</button>.</p>`;
         }
@@ -153,7 +157,9 @@ async function loadSpecies() {
             speciesOptionsDiv.appendChild(button);
         });
     } catch (error) {
-        speciesOptionsDiv.innerHTML = `<p>Error loading species: ${error}</p>`;
+        const errorMessage = `Error loading species: ${error.message || error}`;
+        console.error(errorMessage, error);
+        if (speciesOptionsDiv) speciesOptionsDiv.innerHTML = `<p>${errorMessage}</p>`;
     }
 }
 
@@ -187,7 +193,9 @@ async function loadClasses() {
             classOptionsDiv.appendChild(button);
         });
     } catch (error) {
-        classOptionsDiv.innerHTML = `<p>Error loading classes: ${error}</p>`;
+        const errorMessage = `Error loading classes: ${error.message || error}`;
+        console.error(errorMessage, error);
+        if (classOptionsDiv) classOptionsDiv.innerHTML = `<p>${errorMessage}</p>`;
     }
 }
 
@@ -277,7 +285,11 @@ async function submitCharacterCreation() {
         gameIsActiveForInput = true;
 
     } catch (error) {
-        outputElement.innerHTML = `<p>Error creating character: ${error}</p>`;
+        const errorMessage = `Error creating character: ${error.message || error}`;
+        console.error(errorMessage, error);
+        if (outputElement) outputElement.innerHTML = ''; // Clear "Creating character..."
+        showMenuModal("Creation Error", errorMessage, [{text: "OK", action: () => { /* Optionally, go back to a previous step or main menu */ }}]);
+
     }
 }
 
@@ -302,7 +314,11 @@ async function executeDeleteCharacter(characterName) {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         await showInitialCharacterScreen(); // Refresh the list
     } catch (error) {
-        alert(`Error deleting character ${characterName}: ${error}`); // Simple alert for error
+        const errorMessage = `Error deleting character '${characterName}': ${error.message || error}`;
+        console.error(errorMessage, error);
+        showMenuModal("Deletion Error", errorMessage, [
+            {text: "OK", action: () => {}}
+        ]);
     }
 }
 
@@ -333,7 +349,10 @@ async function handleLoadCharacter(characterName) {
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName);
         gameIsActiveForInput = true;
     } catch (error) {
-        outputElement.innerHTML = `<p>Error loading character ${characterName}: ${error}</p>`;
+        const errorMessage = `Error loading character '${characterName}': ${error.message || error}`;
+        console.error(errorMessage, error);
+        if (outputElement) outputElement.innerHTML = ''; // Clear "Loading character..."
+        showMenuModal("Load Error", errorMessage, [{text: "OK", action: () => { showInitialCharacterScreen(); }}]);
     }
 }
 function goToMainMenu() {
@@ -404,9 +423,23 @@ async function performAction(actionString) {
         const data = await serverResponse.json();
         displaySceneData(data, actionString); // Use a helper to display
     } catch (error) {
-        const p_error = document.createElement('p');
-        p_error.textContent = "Error: " + error; 
-        outputElement.appendChild(p_error);
+        let userMessage = `Error: ${error.message || "An unknown error occurred."}`;
+        if (error instanceof TypeError && error.message.toLowerCase().includes('failed to fetch')) {
+            userMessage = "Network connection issue. Please check your internet and try again.";
+            // Optionally, offer a retry mechanism or guide to main menu
+            showMenuModal("Connection Error", userMessage, [
+                { text: "Retry Last Action", action: () => performAction(actionString) },
+                { text: "Main Menu", action: goToMainMenu },
+                { text: "Close", action: () => {} }
+            ]);
+            // Remove the "Attempting action..." message if we show a modal
+            if (p_attempt && p_attempt.parentNode === outputElement) {
+                outputElement.removeChild(p_attempt);
+            }
+            return; 
+        }
+        console.error("Error in performAction:", error);
+        appendMessageToOutput(userMessage, 'error-message'); // Use new appendMessageToOutput
     }
     outputElement.scrollTop = outputElement.scrollHeight;
 }
@@ -433,8 +466,8 @@ async function toggleWorldMapModal() {
         showWorldMapInModal(mapData);
     } catch (error) {
         console.error("Error fetching world map data:", error);
-        // Optionally show an error to the player
-        showMenuModal("Error", `Could not load world map: ${error.message}`, [{text: "Close", action: () => {}}]);
+        const errorMessage = `Could not load world map: ${error.message || error}`;
+        showMenuModal("Map Error", errorMessage, [{text: "Close", action: () => {}}]);
     }
 }
 
@@ -442,16 +475,22 @@ function showWorldMapInModal(mapData) {
     const locations = mapData.locations || [];
     const currentLocationId = mapData.current_location_id;
 
-    // Determine map dimensions dynamically or use fixed ones
-    let maxX = 0;
-    let maxY = 0;
+    // const zoneName = mapData.zone_name || "Current Zone"; // Zone name is less relevant for the full world map modal title
+
+    // Determine map dimensions dynamically based on min/max coordinates across ALL locations
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;    
     locations.forEach(loc => {
-        if (loc.x > maxX) maxX = loc.x;
-        if (loc.y > maxY) maxY = loc.y;
+        minX = Math.min(minX, loc.x);
+        maxX = Math.max(maxX, loc.x);
+        minY = Math.min(minY, loc.y);
+        maxY = Math.max(maxY, loc.y);
     });
 
-    const gridWidth = maxX + 1; // 0-indexed
-    const gridHeight = maxY + 1; // 0-indexed
+    const gridWidth = maxX - minX + 1;
+    const gridHeight = maxY - minY + 1;
 
     // Emojis
     const EMOJI_CURRENT = '📍'; // Or '🧍'
@@ -462,14 +501,15 @@ function showWorldMapInModal(mapData) {
     const NO_BORDER_STYLE = 'none'; // More forceful way to remove border
 
     let mapHTML = `<div class="world-map-grid-container" style="font-size: 1.5em; line-height: 1; text-align: center; max-height: 400px; overflow-y: auto;">`;
-    mapHTML += `<table style="margin: auto; border-collapse: collapse;">`;
+    mapHTML += `<table style="margin: auto; border-collapse: collapse;">`; // Consider adding overflow-x: auto here if map is very wide
 
     for (let y = 0; y < gridHeight; y++) {
         mapHTML += '<tr>';
         for (let x = 0; x < gridWidth; x++) {
-            const locationAtCell = locations.find(loc => loc.x === x && loc.y === y);
+            // Correctly find the location using adjusted grid coordinates relative to minX and minY
+            const locationAtCell = locations.find(loc => loc.x === x + minX && loc.y === y + minY);
             let cellEmoji = EMOJI_EMPTY;
-            let cellTitle = `(${x},${y})`;
+            let cellTitle = `(${x + minX},${y + minY})`; // Display actual coordinates in title
             let borderStyles = {
                 top: NO_BORDER_STYLE, // Default to no borders for all cells initially
                 right: NO_BORDER_STYLE,
@@ -477,8 +517,8 @@ function showWorldMapInModal(mapData) {
                 left: NO_BORDER_STYLE
             };
             
-            if (locationAtCell) {
-                cellTitle = `${locationAtCell.name} (${x},${y})`;
+            if (locationAtCell) { // If a location exists at these coordinates
+                cellTitle = `${locationAtCell.name} (${locationAtCell.x},${locationAtCell.y})`; // Use actual loc.x, loc.y
                 if (locationAtCell.exits && Object.keys(locationAtCell.exits).length > 0) {
                     const exitDirections = Object.keys(locationAtCell.exits).join(', ');
                     cellTitle += ` (Exits: ${exitDirections})`;
@@ -493,30 +533,22 @@ function showWorldMapInModal(mapData) {
                     cellEmoji = EMOJI_UNVISITED_KNOWN; // Or EMOJI_EMPTY if you don't want to show unvisited
                 }
 
-                // Determine borders based on exits and visited status of neighbors
-                if (locationAtCell.visited || locationAtCell.id === currentLocationId) { // Only visited/current can have borders
-                    // Default to NO_BORDER_STYLE for visited/current cells.
-                    // A border is added ONLY if the player has tried to go that way and failed.
-                    borderStyles.top = NO_BORDER_STYLE;
-                    borderStyles.right = NO_BORDER_STYLE;
-                    borderStyles.bottom = NO_BORDER_STYLE;
-                    borderStyles.left = NO_BORDER_STYLE;
-
+                // Determine borders based on discoveredDeadEnds
+                if (locationAtCell.visited || locationAtCell.id === currentLocationId) {
                     if (discoveredDeadEnds[`${locationAtCell.id}_north`]) borderStyles.top = `1px solid ${OUTER_BORDER_COLOR}`;
                     if (discoveredDeadEnds[`${locationAtCell.id}_east`]) borderStyles.right = `1px solid ${OUTER_BORDER_COLOR}`;
                     if (discoveredDeadEnds[`${locationAtCell.id}_south`]) borderStyles.bottom = `1px solid ${OUTER_BORDER_COLOR}`;
                     if (discoveredDeadEnds[`${locationAtCell.id}_west`]) borderStyles.left = `1px solid ${OUTER_BORDER_COLOR}`;
-
-                } else if (cellEmoji === EMOJI_UNVISITED_KNOWN) {
-                    // Known but unvisited locations also default to NO_BORDER_STYLE (already set)
-                } else { // EMOJI_EMPTY or any other unhandled case
-                     // For truly empty cells, add a faint grid line
-                     borderStyles.top = `1px solid #eee`; 
-                     borderStyles.right = `1px solid #eee`;
-                     borderStyles.bottom = `1px solid #eee`;
-                     borderStyles.left = `1px solid #eee`;
                 }
+            } else { // No location at this cell, it's truly empty or outside defined map areas
+                // For truly empty cells within the calculated grid, add a faint grid line
+                    // For truly empty cells, add a faint grid line
+                    borderStyles.top = `1px solid #eee`; 
+                    borderStyles.right = `1px solid #eee`;
+                    borderStyles.bottom = `1px solid #eee`;
+                    borderStyles.left = `1px solid #eee`;
             }
+        
             const cellStyle = `padding: 0px; border-top: ${borderStyles.top}; border-right: ${borderStyles.right}; border-bottom: ${borderStyles.bottom}; border-left: ${borderStyles.left}; width: 1.5em; height: 1.5em; text-align: center; vertical-align: middle;`;
             mapHTML += `<td title="${cellTitle}" style="${cellStyle}">${cellEmoji}</td>`;
         }
@@ -529,7 +561,7 @@ function showWorldMapInModal(mapData) {
 
 
     // Use the existing showMenuModal to display this content
-    showMenuModal("World Map", mapHTML, [{text: "Close", action: () => {}}]);
+    showMenuModal("Full World Map", mapHTML, [{text: "Close", action: ()=>{}}]); // Updated modal title
     const modalOverlay = document.getElementById('custom-modal-overlay');
     if (modalOverlay) modalOverlay.id = 'world-map-modal-overlay'; // So toggle can find it
 }
@@ -540,27 +572,38 @@ function showWorldMapInModal(mapData) {
 function setupPanel(panelId, containerId, panelTitle) {
     const panel = document.getElementById(panelId);
     const container = document.getElementById(containerId);
-    if (!panel || !container) return null;
+    if (!panel || !container) {
+        console.warn(`Panel (${panelId}) or container (${containerId}) not found for setupPanel.`);
+        return null;
+    }
 
     if (panel.parentNode !== container) { // Move panel if not already in the container
         container.appendChild(panel);
+    }
+
+    // Ensure title paragraph exists and is correct, or create/replace it
+    let titlePElement = panel.querySelector('p:first-child');
+    const expectedTitleHTML = `<strong>${panelTitle}:</strong>`;
+
+    if (!titlePElement || !titlePElement.innerHTML.includes(expectedTitleHTML)) {
+        // If a <p> exists but isn't the title, or no <p> exists, create/replace title
+        if (titlePElement && titlePElement.querySelector('strong')) { // It's an old title, remove it
+            titlePElement.remove();
+        }
+        titlePElement = document.createElement('p');
+        titlePElement.innerHTML = expectedTitleHTML;
+        panel.insertBefore(titlePElement, panel.firstChild);
     }
 
     let buttonsContainer = panel.querySelector('.dynamic-buttons-container');
     if (!buttonsContainer) {
         buttonsContainer = document.createElement('div');
         buttonsContainer.classList.add('dynamic-buttons-container');
-        const pElement = panel.querySelector('p'); // Assumes a <p> with the title exists
-        if (pElement) {
-            pElement.insertAdjacentElement('afterend', buttonsContainer);
-        } else { // Fallback if no <p> title, just append
-            const titleP = document.createElement('p');
-            titleP.innerHTML = `<strong>${panelTitle}:</strong>`;
-            panel.insertBefore(titleP, panel.firstChild); // Add title if missing
-            panel.appendChild(buttonsContainer);
-        }
+        // Insert buttons container after the title paragraph
+        titlePElement.insertAdjacentElement('afterend', buttonsContainer);
     }
-    buttonsContainer.innerHTML = ''; // Clear previous buttons
+    
+    buttonsContainer.innerHTML = ''; // Always clear previous buttons
     return buttonsContainer;
 }
 
@@ -889,15 +932,26 @@ function updateZoneMapSidePanel(zoneMapData) {
     const currentLocationId = zoneMapData.current_location_id;
     const zoneName = zoneMapData.zone_name || "Current Zone";
 
-    let maxX = 0;
-    let maxY = 0;
+    // Determine map dimensions dynamically based on min/max coordinates for THIS zone's locations
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
     locations.forEach(loc => {
-        if (loc.x > maxX) maxX = loc.x;
-        if (loc.y > maxY) maxY = loc.y;
+        minX = Math.min(minX, loc.x);
+        maxX = Math.max(maxX, loc.x);
+        minY = Math.min(minY, loc.y);
+        maxY = Math.max(maxY, loc.y);
     });
 
-    const gridWidth = maxX + 1;
-    const gridHeight = maxY + 1;
+    // If locations array was empty or had no valid coords, min/max might still be Infinity/-Infinity
+    if (minX === Infinity || locations.length === 0) { // Handle case with no locations or no valid coords
+        panel.innerHTML = `<p style="text-align: center; margin-bottom: 5px;"><strong>Zone: ${zoneName}</strong></p><p style="text-align:center;">No map data for this zone.</p>`;
+        return;
+    }
+
+    const gridWidth = maxX - minX + 1;
+    const gridHeight = maxY - minY + 1;
 
     const EMOJI_CURRENT = '📍';
     const EMOJI_VISITED = '🟩';
@@ -912,13 +966,13 @@ function updateZoneMapSidePanel(zoneMapData) {
     for (let y = 0; y < gridHeight; y++) {
         mapHTML += '<tr>';
         for (let x = 0; x < gridWidth; x++) {
-            const locationAtCell = locations.find(loc => loc.x === x && loc.y === y);
+            const locationAtCell = locations.find(loc => loc.x === x + minX && loc.y === y + minY);
             let cellEmoji = EMOJI_EMPTY;
-            let cellTitle = `(${x},${y})`;
+            let cellTitle = `(${(x + minX)},${(y + minY)})`; // Display actual coordinates
             let borderStyles = { top: NO_BORDER_STYLE, right: NO_BORDER_STYLE, bottom: NO_BORDER_STYLE, left: NO_BORDER_STYLE };
 
             if (locationAtCell) {
-                cellTitle = `${locationAtCell.name} (${x},${y})`;
+                cellTitle = `${locationAtCell.name} (${locationAtCell.x},${locationAtCell.y})`; // Use actual loc.x, loc.y
                 if (locationAtCell.exits && Object.keys(locationAtCell.exits).length > 0) { /* ... tooltip ... */ }
                 if (locationAtCell.id === currentLocationId) cellEmoji = EMOJI_CURRENT;
                 else if (locationAtCell.visited) cellEmoji = EMOJI_VISITED;
@@ -1018,10 +1072,11 @@ window.onload = () => {
     });
 };
 
-function appendMessageToOutput(messageText) {
+function appendMessageToOutput(messageText, className = null) {
     const outputElement = document.getElementById('game-output');
     const p_msg = document.createElement('p');
     p_msg.textContent = messageText;
+    if (className) p_msg.classList.add(className);
     outputElement.appendChild(p_msg);
     outputElement.scrollTop = outputElement.scrollHeight;
 }
