@@ -67,23 +67,26 @@
         "zone": "SouthernRoad",
         "map_x": 1,
         "map_y": 4,
-        "description": "The road continues south. In the distance, you can see the town of Riverford nestled by a river. The path north leads back towards Eldoria.",
-        "exits": {"north": "southern_road_1", "south": "riverford_north_gate"},
+        "description": "The road continues south, leading directly to the Town of Riverford. The path north leads back towards Eldoria.",
+        "exits": {"north": "southern_road_1", "south": "riverford_city_node"},
         "items": [],
-        "npcs": {}},
+        "npcs": {}
+    },
     "riverford_city_node": {
         "name": "Town of Riverford",
         "zone": "Riverford",
         "map_x": 1,
         "map_y": 5,
         "description": "The quaint town of Riverford lies before you, its northern gates open. A road leads north out of town.",
-        "exits": {"north": "southern_road_2"},
+        "exits": {"north": "southern_road_2","east": "eastern_forest_edge_riverford"},
         "city_map_transitions": {
             "enter": {
                 "city_id": "riverford",
                 "entry_point_key": "from_north_gate"
             }
-        }
+        },
+        "on_arrival_message": "The gentle sounds of Riverford welcome you." 
+
     },
      "deep_woods": {
         "name": "Deep Woods",

@@ -1,110 +1,93 @@
 {
     "city_id": "riverford",
-    "name": "Riverford Detailed Map",
-    "grid_size": {"width": 8, "height": 8},
+    "name": "Riverford Layout",
+    "grid_size": {"width": 8, "height": 12},
     "entry_points": {
         "from_north_gate": {"x": 3, "y": 0, "facing_direction": "south"}
     },
     "cells": [
         [
-            {"type": "wall_city_edge", "description": "Edge of town."},
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"},
-            {"type": "city_gate_north", "description": "North Gate - To Southern Road",
-             "action": {
-                 "type": "exit_to_zone_map",
-                 "target_zone_loc_id": "riverford_city_node"
-                }
-            },
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"}
+            {"type": "wall_city_edge"}, {"type": "wall_city_edge"}, {"type": "wall_city_edge"},
+            {"type": "city_gate_north", "description": "North Gate - To the Southern Road", "action": {"type": "exit_to_zone_map", "target_zone_loc_id": "riverford_city_node"}},
+            {"type": "wall_city_edge"}, {"type": "wall_city_edge"}, {"type": "wall_city_edge"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "building_house_small", "name": "Quiet Cottage"},
-            {"type": "path", "description": "A cobblestone path."},
-            {"type": "path"},
-            {"type": "path", "description": "Path leading south from the gate."},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "building_house_small", "name": "Angler's Shack"},
-            {"type": "wall_city_edge"}
+            {"type": "building_house_small", "name": "Riverwood Mill Office"}, {"type": "path", "description": "Path from the North Gate."},
+            {"type": "market_stall_fish", "name": "Old Man Tiber's Fish"}, {"type": "path_market_center", "description": "North Market Area"},
+            {"type": "market_stall_food", "name": "Elara's Baked Goods"}, {"type": "path"},
+            {"type": "building_house_small", "name": "Empty Stall"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "building_house_small", "name": "Herbalist's Home (locked)"},
-            {"type": "path"},
-            {"type": "town_square_edge", "description": "Edge of the town square."},
-            {"type": "town_square_open", "description": "Riverford Town Square."},
-            {"type": "town_square_spring", "description": "A small, bubbling spring at the center of the square.", "feature_id": "riverford_spring"},
-            {"type": "town_square_open", "npc_id": "concerned_villager", "description": "The concerned villager paces here."},
-            {"type": "town_square_edge"},
-            {"type": "building_house_small", "name": "Empty Stall"}
+            {"type": "wall_city_edge"}, {"type": "path"},
+            {"type": "path_market_center", "description": "West Market Stalls"}, {"type": "path_market_center", "description": "Riverford Market Center", "feature_id": "riverford_town_well"},
+            {"type": "path_market_center", "description": "East Market Stalls"}, {"type": "market_stall_generic", "name": "Traveling Merchant's Cart"},
+            {"type": "path"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "wall_city_edge"},
-            {"type": "path"},
-            {"type": "town_square_open"},
-            {"type": "town_square_open"},
-            {"type": "town_square_open"},
-            {"type": "town_square_open"},
-            {"type": "path", "description": "Path leading towards the docks."},
-            {"type": "building_storage", "name": "Dock Storage"}
+            {"type": "building_house_medium", "name": "The Sleeping Carp Inn"}, {"type": "market_stall_generic", "name": "Pottery & Tools"},
+            {"type": "path"}, {"type": "path_market_center"}, {"type": "path"},
+            {"type": "building_house_small", "name": "Tailor's Shop"}, {"type": "building_house_small"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "wall_city_edge"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "docks_wooden_plank", "description": "Wooden planks of the docks."},
-            {"type": "docks_edge", "npc_id": "old_fisherman", "description": "The old fisherman mends nets here."}
+            {"type": "wall_city_edge"}, {"type": "path_riverside", "description": "Path along the riverbank."},
+            {"type": "path_riverside"}, {"type": "path_riverside", "npc_id": "riverford_fisherman", "description": "A fisherman casts his line."},
+            {"type": "path_riverside"}, {"type": "path_riverside"},
+            {"type": "path_riverside"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "wall_city_edge"},
-            {"type": "building_house_small", "name": "Fisher's Hut"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "docks_wooden_plank"},
-            {"type": "docks_mooring_post", "description": "A sturdy mooring post."},
-            {"type": "water_river_edge", "description": "The edge of the flowing river."}
+            {"type": "wall_city_edge"}, {"type": "path"},
+            {"type": "building_house_small"}, {"type": "path_market_center", "description": "South Market Area"},
+            {"type": "building_house_small"}, {"type": "path"},
+            {"type": "path"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "wall_city_edge"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "path"},
-            {"type": "docks_wooden_plank"},
-            {"type": "docks_wooden_plank"},
-            {"type": "water_river_edge"},
-            {"type": "water_river_edge"}
+            {"type": "wall_city_edge"}, {"type": "path"}, {"type": "path"}, {"type": "path"}, {"type": "path"},
+            {"type": "path"}, {"type": "path"}, {"type": "wall_city_edge"}
         ],
         [
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"},
-            {"type": "wall_city_edge"},
-            {"type": "docks_end", "description": "End of the docks."},
-            {"type": "water_river_edge"},
-            {"type": "water_river_edge"},
-            {"type": "water_river_edge"}
+            {"type": "wall_city_edge"}, {"type": "wall_city_edge"}, {"type": "wall_city_edge"},
+            {"type": "city_gate_internal", "description": "Archway to the Training Grounds", "action": {"type": "move_to_cell", "target_cell": {"x": 3, "y": 8}}},
+            {"type": "wall_city_edge"}, {"type": "wall_city_edge"}, {"type": "wall_city_edge"}, {"type": "wall_city_edge"}
+        ],
+        [
+            {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"},
+            {"type": "city_gate_internal", "description": "Archway to the Market", "action": {"type": "move_to_cell", "target_cell": {"x": 3, "y": 7}}},
+            {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"}
+        ],
+        [
+            {"type": "arena_wall"}, {"type": "training_ground_path", "description": "Compacted earth of the training yard."},
+            {"type": "training_ground_path", "npc_id": "riverford_sparring_captain", "description": "A stern-looking captain observes."},
+            {"type": "training_ground_path", "description": "Center of the yard."},
+            {"type": "training_ground_path", "npc_id": "training_dummy_heavy", "description": "A heavily padded training dummy."},
+            {"type": "training_ground_path"},
+            {"type": "training_ground_path", "npc_id": "recruit_fighter_1", "description": "A recruit practices their swings."},
+            {"type": "arena_wall"}
+        ],
+        [
+            {"type": "arena_wall"}, {"type": "training_ground_path"},
+            {"type": "training_ground_path", "npc_id": "recruit_fighter_2", "description": "Another recruit spars."},
+            {"type": "training_ground_path", "feature_id": "weapon_rack_basic", "description": "A rack holds blunted practice weapons."},
+            {"type": "training_ground_path"}, {"type": "training_ground_path"},
+            {"type": "training_ground_path"}, {"type": "arena_wall"}
+        ],
+        [
+            {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"},
+            {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"}, {"type": "arena_wall"}
         ]
     ],
     "legend": {
-        "wall_city_edge": {"symbol": "#", "description": "Edge of Town/Impassable"},
-        "city_gate_north": {"symbol": "N", "description": "North City Gate"},
-        "path": {"symbol": ".", "description": "Path"},
-        "building_house_small": {"symbol": "H", "description": "Small House"},
-        "building_storage": {"symbol": "S", "description": "Storage Shed"},
-        "town_square_edge": {"symbol": "s", "description": "Edge of Town Square"},
-        "town_square_open": {"symbol": "S", "description": "Town Square"},
-        "town_square_spring": {"symbol": "F", "description": "Bubbling Spring"},
-        "docks_wooden_plank": {"symbol": "=", "description": "Wooden Dock Plank"},
-        "docks_edge": {"symbol": "D", "description": "Edge of the Docks"},
-        "docks_mooring_post": {"symbol": "o", "description": "Mooring Post"},
-        "docks_end": {"symbol": "d", "description": "End of the Docks"},
-        "water_river_edge": {"symbol": "~", "description": "River Water"}
+        "wall_city_edge": {"symbol": "🧱", "description": "Town Wall/Boundary"},
+        "path": {"symbol": "👣", "description": "Path"},
+        "path_riverside": {"symbol": "🌊", "description": "Riverside Path"},
+        "building_house_small": {"symbol": "🏡", "description": "Small Building"},
+        "building_house_medium": {"symbol": "🏠", "description": "Medium Building"},
+        "city_gate_north": {"symbol": "⛩️", "description": "North Gate"},
+        "city_gate_internal": {"symbol": "🚪", "description": "Internal Archway/Gate"},
+        "market_stall_fish": {"symbol": "🐟", "description": "Fish Stall"},
+        "market_stall_food": {"symbol": "🥖", "description": "Food Stall"},
+        "market_stall_generic": {"symbol": "🧺", "description": "Market Stall"},
+        "path_market_center": {"symbol": "廣場", "description": "Market Square Area"},
+        "arena_wall": {"symbol": "🚧", "description": "Training Ground Fence/Wall"},
+        "training_ground_path": {"symbol": "🤺", "description": "Training Ground"}
     }
 }
