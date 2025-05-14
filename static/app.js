@@ -849,6 +849,38 @@ function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
         });
     });
 }
+function updateActionButtonsComponent(availableActions) {
+    const actionsPanel = document.getElementById('general-actions-panel'); // Assuming you have a panel for these
+    const buttonsContainer = setupPanel('general-actions-panel', 'action-panels-container', 'Actions'); // Using your setupPanel helper
+
+    if (!buttonsContainer || !actionsPanel) {
+        console.error("Actions panel or buttons container not found for updateActionButtonsComponent.");
+        return;
+    }
+
+    if (availableActions && availableActions.length > 0) {
+        availableActions.forEach(actionString => {
+            const actionButton = document.createElement('button');
+            let buttonText = actionString.charAt(0).toUpperCase() + actionString.slice(1); // Capitalize first letter
+
+            // You can customize button text for specific actions
+            if (actionString === "enter city") {
+                buttonText = "Enter City";
+            } else if (actionString === "exit city") {
+                buttonText = "Exit City";
+            }
+            // Add more custom texts if needed
+
+            actionButton.textContent = buttonText;
+            actionButton.onclick = () => performAction(actionString);
+            buttonsContainer.appendChild(actionButton);
+        });
+        actionsPanel.style.display = 'block';
+    } else {
+        actionsPanel.style.display = 'none';
+    }
+}
+
 
 function updateInventoryModalComponent(data, actionStringEcho) {
     if (actionStringEcho === 'inventory') {
@@ -1022,6 +1054,7 @@ function displaySceneData(data, actionStringEcho = null) {
 
         // Call the component function to update the Game Actions Panel
         updateGameActionsComponent(data);
+        updateActionButtonsComponent(data.available_actions); // Add this line
         updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
         updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
 

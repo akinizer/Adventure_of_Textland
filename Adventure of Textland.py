@@ -413,6 +413,11 @@ def log_game_event(event_type, data_dict):
         "event_type": event_type,
         **data_dict # Merge the specific event data
     }
+    
+    # --- Reporting "enter" events to console ---
+    enter_event_types = ["enter_city_map_via_command", "auto_move_to_city_map"]
+    if event_type in enter_event_types:
+        print(f"[CONSOLE_REPORT] 'Enter' event logged: Type='{event_type}', Data='{data_dict.get('to_city', data_dict.get('to', 'N/A'))}'")
 
     try:
         with open(log_file_path, 'a') as f: # Append mode
@@ -689,7 +694,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             "interactable_features": [], 
             "room_items": [], 
             "npcs_in_room": [], # List of NPCs in the room
-                "can_save_in_city": False, 
+                "can_save_in_city": False,
+                "available_actions": [], # Initialize available_actions
                 "available_exits": [], # For dynamic go buttons
                 "current_zone_map_data": None, # Initialize for the side panel zone map
                 "available_exits": [] # For dynamic go buttons
@@ -800,6 +806,24 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                     else: 
                         player.move_to(destination_loc_id) 
                         game_response["message"] = f"You walk {direction}."
+                        
+                        # "Listener" for city node arrival
+                        new_location_data_after_move = locations.get(player.current_location_id, {})
+                        if new_location_data_after_move.get("city_map_transitions", {}).get("enter"):
+                            # Add "enter city" action if not already present
+                            if "enter city" not in game_response.get("available_actions", []):
+                                game_response.setdefault("available_actions", []).append("enter city")
+                            
+                            # Check for and append a custom on_arrival_message
+                            arrival_message = new_location_data_after_move.get("on_arrival_message")
+                            if arrival_message:
+                                game_response["message"] += f" {arrival_message}"
+                            
+                            log_game_event("arrived_at_city_node", {
+                                "city_node_id": player.current_location_id,
+                                "city_name": new_location_data_after_move.get("name", "Unknown City"),
+                                "player_name": player.name
+                            })
                 else:
                     game_response["message"] = f"You can't go {direction} from here."
                     game_response["player_current_location_id"] = player.current_location_id 
@@ -1214,6 +1238,35 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             # Populate available_exits from zone map location data (this was done earlier, ensure it's not overwritten if not city)
             if not game_response.get("available_exits"): # If not already set by city logic
                  game_response["available_exits"] = list(current_location_data_for_response.get("exits", {}).keys())
+            
+            # General check for city entrance based on data
+            is_general_city_entrance = current_location_data_for_response.get("city_map_transitions", {}).get("enter")
+            
+            print(f"\n[PREREQ_LOG] ----- Final Assembly Check -----")
+            print(f"[PREREQ_LOG] Current Loc ID for Final Assembly: {player.current_location_id}")
+            print(f"[PREREQ_LOG] Location '{player.current_location_id}' has 'city_map_transitions.enter' (general check): {bool(is_general_city_entrance)}")
+
+            if is_general_city_entrance:
+                if "enter city" not in game_response.get("available_actions", []):
+                    game_response.setdefault("available_actions", []).append("enter city")
+                    print(f"[PREREQ_LOG] 'enter city' ADDED by Final Assembly (general check) for {player.current_location_id}.")
+            
+            # TEST PURPOSE: Ensure "enter city" is visible for eldoria_city_node "no matter what"
+            is_eldoria_node_test_case = player.current_location_id == "eldoria_city_node"
+            print(f"[PREREQ_LOG] Is current location 'eldoria_city_node' (test case): {is_eldoria_node_test_case}")
+            
+            if player.current_location_id == "eldoria_city_node":
+                if "enter city" not in game_response.get("available_actions", []):
+                    game_response.setdefault("available_actions", []).append("enter city")
+                    print(f"[PREREQ_LOG] 'enter city' ADDED by Final Assembly (eldoria_city_node specific test) for {player.current_location_id}.")
+            
+            if not is_general_city_entrance and not is_eldoria_node_test_case:
+                 print(f"[PREREQ_LOG] 'enter city' NOT added by Final Assembly for {player.current_location_id} (conditions not met).")
+            
+            print(f"[PREREQ_LOG] Final available_actions before sending: {game_response.get('available_actions')}")
+            print(f"[PREREQ_LOG] ----------------------------------\n")
+
+
 
         return jsonify(game_response)
 
@@ -2041,40 +2094,32 @@ def process_command(full_command_input):
                 if direction in location_data.get("exits", {}):
                     destination_loc_id = location_data["exits"][direction]
                     destination_loc_data = locations.get(destination_loc_id, {})
-                    city_id_for_destination = destination_loc_data.get("zone") # Assuming city_id matches zone name for now
+                    
+                    # Check if moving to a city node that should trigger city map entry
+                    city_map_transition_info = destination_loc_data.get("city_map_transitions", {}).get("enter")
+                    city_id_from_transition = city_map_transition_info.get("city_id") if city_map_transition_info else None
 
-                    # Check if this destination is an entry to a city with a detailed map
-                    if city_id_for_destination and city_id_for_destination in city_maps_data:
-                        # Attempt to transition to city map
-                        # We need a way to map the zone location ID (e.g., "riverford_north_gate")
-                        # to the correct entry point key in the city map (e.g., "from_north_gate")
-                        # For now, let's assume a direct mapping or a convention.
-                        # Example: if current_loc_id is "riverford_north_gate" and direction is "south"
-                        # leading to "riverford_square", and "riverford" is the city_id.
-                        
-                        # Simplified entry point key for this example:
-                        # This needs to be more robust, e.g., based on the specific gate ID or a property in locations.json
-                        entry_point_key = f"from_{loc_id.replace(f'{city_id_for_destination}_', '')}" # e.g. "from_north_gate"
-                        if loc_id == "riverford_north_gate" and direction == "south": # Specific condition for Riverford entry
-                            entry_point_key = "from_north_gate"
-                        elif loc_id == "eldoria_south_gate" and direction == "south": # Specific condition for Eldoria entry
-                             entry_point_key = "from_south_gate"
-                        # Add more specific entry conditions as needed or design a better mapping
-
-                        city_map_details = city_maps_data.get(city_id_for_destination)
+                    if city_map_transition_info and city_id_from_transition and city_id_from_transition in city_maps_data:
+                        city_map_details = city_maps_data.get(city_id_from_transition)
+                        entry_point_key = city_map_transition_info.get("entry_point_key")
                         entry_coords = city_map_details.get("entry_points", {}).get(entry_point_key)
 
                         if entry_coords:
+                            player.last_zone_location_id = destination_loc_id # Store the city node ID
                             player.current_map_type = "city"
-                            player.current_city_id = city_id_for_destination
+                            player.current_city_id = city_id_from_transition
                             player.current_city_x = entry_coords["x"]
                             player.current_city_y = entry_coords["y"]
                             player.current_location_id = destination_loc_id # Keep track of the zone map "parent" location
-                            print(f"You enter the bustling city of {city_map_details.get('name', city_id_for_destination.capitalize())}.")
-                        else: # No valid entry point defined for this way of entering
+                            print(f"You enter the bustling city of {city_map_details.get('name', city_id_from_transition.capitalize())}.")
+                        else: 
+                            # City transition defined, but entry point key is invalid in city_map.json
+                            # or entry_coords are missing.
+                            print(f"You arrive at {destination_loc_data.get('name', 'the city entrance')}, but the way into the detailed map is unclear from here.")
                             player.move_to(destination_loc_id)
                             print(f"You walk {direction}.")
-                    else: # Not a city with a detailed map, or not entering it
+                    else: 
+                        # Not a city with a detailed map, or no transition info
                         player.move_to(destination_loc_id)
                         print(f"You walk {direction}.")
                 else: print(f"You can't go {direction} from here.")
@@ -2313,7 +2358,7 @@ if __name__ == "__main__":
     auto_start_game = False
     start_browser_on_launch = False
     run_character_creation_on_start = True 
-    
+
     if "--autostart" in sys.argv:
         auto_start_game = True
     if "--browser" in sys.argv:
@@ -2321,7 +2366,8 @@ if __name__ == "__main__":
 
     # --- Character Selection / Creation for Terminal ---
     if not start_browser_on_launch: # If browser is launched, it handles its own CC/load flow
-        existing_chars = list_existing_characters()
+        # This block is for terminal-only startup
+        existing_chars = list_existing_characters() 
         if existing_chars and not auto_start_game: 
             print("\n--- Welcome to Adventure of Textland ---")
             options = {}
@@ -2372,31 +2418,44 @@ if __name__ == "__main__":
         elif run_character_creation_on_start or auto_start_game: # No existing chars, or autostart with no chars
             initialize_game_state()
     
+    # --- Browser Launch Logic ---
     if start_browser_on_launch:
         if flask_available:
             launch_web_interface() 
-            # If browser is launched, main_game_loop for terminal might not be desired,
-            # or it could run in parallel. For now, let's assume if --browser is used,
-            # the primary interaction is expected via browser.
-            # The web server runs in a daemon thread, so the main thread will continue.
-            # If we want the script to *only* serve the web and not run terminal game:
             if web_server_thread and web_server_thread.is_alive():
                 print("Web server is running. Terminal game loop will not start if browser is primary.")
+                print("The game state will be managed by web requests.")
+                print("Close this terminal to stop the web server and the game.")
+                # Keep the main thread alive while the web server (daemon thread) runs.
+                # This prevents the script from exiting immediately.
                 try:
                     while web_server_thread.is_alive(): # Keep main thread alive while server runs
                         time.sleep(1)
                 except KeyboardInterrupt:
                     print("\nShutting down web server and game.")
-                sys.exit(0) # Exit after web server stops or on interrupt
+                # sys.exit(0) # Exit after web server stops or on interrupt - let it fall through
             else:
-                print("Failed to start web server. Terminal game might proceed if configured.")
+                print("[ERROR] Failed to start web server, but --browser was specified.")
+                # Decide if we should attempt terminal mode as a fallback
+                # If no character is active yet, try to initialize for terminal
+                if not player.game_active and (run_character_creation_on_start or auto_start_game):
+                    print("Attempting to initialize for terminal mode as a fallback...")
+                    initialize_game_state() 
+                # Fall through to potentially run main_game_loop if player is active
         else:
             print("\n[INFO] Flask library not found. Cannot start browser interface.")
             print("       Please install Flask (e.g., 'pip install Flask') and run with --browser again.")
             print("       Proceeding with terminal mode if character was created/loaded.")
-            if not player["game_active"] and (run_character_creation_on_start or auto_start_game):
+            if not player.game_active and (run_character_creation_on_start or auto_start_game):
                  initialize_game_state() # Ensure game starts if browser failed but CC was intended
-
-    # Only run main_game_loop if not exclusively in browser mode or if browser failed to start
-    if player.game_active or (not start_browser_on_launch and not player.game_active):
+    
+    # --- Terminal Game Loop Condition ---
+    # Run terminal game loop if:
+    # 1. Browser was not requested OR
+    # 2. Browser was requested but failed to start AND player is now active (e.g., via fallback CC)
+    if not start_browser_on_launch or (start_browser_on_launch and not (web_server_thread and web_server_thread.is_alive())):
+        if player.game_active: # Only run if a character is active
+            main_game_loop()
+        elif not start_browser_on_launch: # If not browser mode and no active char, something went wrong with CC
+            print("No active character. Exiting.")
         main_game_loop()
