@@ -50,3 +50,17 @@ button:hover { background-color: #0056b3; }
     z-index: 2000; /* Above everything else */
 }
 .modal-menu-button { margin: 5px; } /* Style for buttons in our custom modal */
+
+.new-character-option {
+    display: flex; /* Align button and dice on the same line */
+    align-items: center; /* Vertically align them */
+    margin-top: 10px; /* Spacing from other options */
+    gap: 10px; /* Space between button and dice */
+}
+
+.dice-image-static { /* New class for the static dice image */
+    width: 32px;  /* Increased size */
+    height: 32px; /* Increased size */
+    vertical-align: middle; /* Helps align with button text if needed */
+    /* Add any other styling like borders, etc. if you want */
+}

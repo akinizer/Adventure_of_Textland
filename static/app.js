@@ -110,11 +110,67 @@ async function showInitialCharacterScreen() {
                 charOptionsDiv.appendChild(charEntryDiv);
             });
         }
+        // Container for "Create New Character" button and dice
+        const newCharOptionContainer = document.createElement('div');
+        newCharOptionContainer.className = 'new-character-option'; // For styling alignment
 
         const newCharButton = document.createElement('button');
         newCharButton.textContent = "Create New Character";
         newCharButton.onclick = () => loadSpecies(); // Start new character creation flow
-        charOptionsDiv.appendChild(newCharButton);
+        newCharOptionContainer.appendChild(newCharButton);
+
+        // Add the static dice image
+        const diceImage = document.createElement('img');
+        diceImage.id = 'static-dice-image';
+        diceImage.className = 'dice-image-static'; // New class for styling the static image
+        diceImage.src = 'static/images/dice_icon.png'; // CHANGE 'dice_icon.png' if your image has a different name
+        diceImage.alt = 'Random Character';
+        diceImage.title = 'Click to create a random character'; // Tooltip
+        diceImage.style.cursor = 'pointer'; // Indicate it's clickable
+
+        diceImage.onclick = async () => {
+            console.log("Dice clicked - attempting auto character creation.");
+            const creationArea = document.getElementById('character-creation-area');
+            creationArea.innerHTML = '<h2>Creating Random Character...</h2><p>Please wait.</p>';
+
+            try {
+                // Fetch species and classes
+                const [speciesResponse, classesResponse] = await Promise.all([
+                    fetch('/get_species'),
+                    fetch('/get_classes')
+                ]);
+
+                if (!speciesResponse.ok) throw new Error(`Failed to fetch species: ${speciesResponse.status}`);
+                if (!classesResponse.ok) throw new Error(`Failed to fetch classes: ${classesResponse.status}`);
+
+                const speciesList = await speciesResponse.json();
+                const classList = await classesResponse.json();
+
+                if (!speciesList || speciesList.length === 0) throw new Error("No species available for random selection.");
+                if (!classList || classList.length === 0) throw new Error("No classes available for random selection.");
+
+                // Randomly select
+                const randomSpecies = speciesList[Math.floor(Math.random() * speciesList.length)];
+                const randomClass = classList[Math.floor(Math.random() * classList.length)];
+                const randomName = `Hero${Math.floor(Math.random() * 9000) + 1000}`; // e.g., Hero1234
+                const randomGender = Math.random() < 0.5 ? "Male" : "Female";
+
+                console.log("Randomly selected:", randomSpecies.id, randomClass.id, randomName, randomGender);
+
+                // Call submitCharacterCreation with these random values
+                // We need to set chosenSpecies and chosenClass globally for submitCharacterCreation to use them
+                chosenSpecies = randomSpecies.id; // Assuming submitCharacterCreation uses these global vars
+                chosenClass = randomClass.id;   // Assuming submitCharacterCreation uses these global vars
+                await submitCharacterCreation(randomName, randomGender, true); // Pass a flag for auto-creation
+            } catch (error) {
+                console.error("Error during auto character creation:", error);
+                creationArea.innerHTML = `<h2>Error Creating Random Character</h2><p>${error.message}. Please try again or create manually.</p><button onclick="showInitialCharacterScreen()">Back to Character Select</button>`;
+            }
+        };
+        newCharOptionContainer.appendChild(diceImage);
+
+        charOptionsDiv.appendChild(newCharOptionContainer);
+
 
     } catch (error) {
         console.error("Error occurred in showInitialCharacterScreen while fetching or processing characters:", error);
@@ -237,10 +293,11 @@ function loadNameGenderForm() {
     }
 }
 
-async function submitCharacterCreation() {
+async function submitCharacterCreation(predefinedName = null, predefinedGender = null, isAutoCreate = false) {
     console.trace("submitCharacterCreation called");
     const charNameInput = document.getElementById('charName');
-    const charName = charNameInput.value.trim();
+    const charName = predefinedName || (charNameInput ? charNameInput.value.trim() : `AutoHero${Date.now()}`);
+    const chosenGender = predefinedGender || (document.querySelector('input[name="charGender"]:checked') ? document.querySelector('input[name="charGender"]:checked').value : "Male");
     if (!charName) {
         alert("Please enter a name for your character.");
         charNameInput.focus();
@@ -251,8 +308,6 @@ async function submitCharacterCreation() {
         charNameInput.focus();
         return;
     }
-    const chosenGender = document.querySelector('input[name="charGender"]:checked').value;
-
     console.log("Submitting Character:", chosenSpecies, chosenClass, charName, chosenGender);
 
     const creationArea = document.getElementById('character-creation-area');
