@@ -877,9 +877,13 @@ function updateGameActionsComponent(data) {
 function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
     const modalGridContainer = document.getElementById('modal-backpack-grid');
     if (!modalGridContainer) return; 
-
+    
+    itemsToDisplay = itemsToDisplay || []; // Ensure itemsToDisplay is an array
     let gridHTML = '';
-    const totalSlots = 48; 
+    const MIN_BACKPACK_SLOTS = 24; // e.g., 3 rows of 8
+    const EXTRA_EMPTY_SLOTS_IN_BACKPACK = 8; // e.g., one extra row for spacing
+    const totalSlots = Math.max(MIN_BACKPACK_SLOTS, itemsToDisplay.length + EXTRA_EMPTY_SLOTS_IN_BACKPACK);
+
     for (let i = 0; i < totalSlots; i++) {
         if (i < itemsToDisplay.length) {
             const item = itemsToDisplay[i]; 
@@ -900,7 +904,7 @@ function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
             event.preventDefault(); 
             const itemId = this.getAttribute('data-item-id');
             performAction(`equip ${itemId}`);
-            closeModal(); 
+            //closeModal(); 
         });
     });
 }
@@ -939,7 +943,15 @@ function updateActionButtonsComponent(availableActions) {
 
 function updateInventoryModalComponent(data, actionStringEcho) {
     if (actionStringEcho === 'inventory') {
-        let sortButtonHTML = `<div style="margin-bottom: 10px;"><button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button></div>`;
+        let controlsHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div>
+                    <input type="checkbox" id="autoEquipInventoryCheckbox" name="autoEquipInventory">
+                    <label for="autoEquipInventoryCheckbox" style="font-size: 0.9em;">Auto-Equip (on check)</label>
+                </div>
+                <button onclick="performAction('sort_inventory_by_id_action')">Sort by ID</button>
+            </div>`;
+
         let inventoryGridHTML = '<div id="modal-backpack-grid" style="display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: minmax(60px, auto); gap: 5px; padding: 10px; max-height: 400px; overflow-y: auto;">';
 
         if (data.inventory_list && data.inventory_list.length > 0) {
@@ -948,16 +960,38 @@ function updateInventoryModalComponent(data, actionStringEcho) {
             inventoryGridHTML = "<p>Your inventory is empty.</p>"; 
         }
         
-        let modalDisplayContent = sortButtonHTML + inventoryGridHTML;
+        let modalDisplayContent = controlsHTML + inventoryGridHTML;
         showMenuModal("Backpack", modalDisplayContent, [{text: "Close", action: () => {}}]);
         
         if (data.inventory_list && data.inventory_list.length > 0) {
             renderOrUpdateModalBackpackGrid(data.inventory_list);
         }
+
+        // Add event listener for the new auto-equip checkbox
+        const autoEquipCheckbox = document.getElementById('autoEquipInventoryCheckbox');
+        if (autoEquipCheckbox) {
+            // Set initial state from player data received from backend
+            // Assuming the backend sends this as: data.player_preferences.auto_equip_from_inventory_panel_enabled
+            autoEquipCheckbox.checked = (data.player_preferences && data.player_preferences.auto_equip_from_inventory_panel_enabled === true);
+
+            autoEquipCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                // Send action to backend to update the persistent player setting
+                // Example action: "set_player_preference <preference_name> <value>"
+                performAction(`set_player_preference auto_equip_from_inventory_panel_enabled ${isChecked}`);
+
+                if (isChecked) {
+                    // If now checked, also perform the immediate auto-equip attempt from current inventory
+
+                    console.log("Auto-equip checkbox checked. Sending 'auto_equip_inventory' action.");
+                    performAction('auto_equip_inventory');
+                }
+            });
+        }
+
         if (document.getElementById('game-output') && data.message === "Your inventory is empty.") {
             data.message = ""; 
         }
-
     } else if (actionStringEcho === 'sort_inventory_by_id_action' && data.inventory_list) {
         const modalGrid = document.getElementById('modal-backpack-grid');
         if (modalGrid && document.getElementById('custom-modal-overlay')) {
@@ -1096,6 +1130,16 @@ function displaySceneData(data, actionStringEcho = null) {
     // Call the top-level component update functions
         updateInventoryModalComponent(data, actionStringEcho);
         updateGameOutputComponent(data, actionStringEcho);
+
+        // If the inventory modal ("Backpack") is already open, refresh its grid content
+        const inventoryModal = document.getElementById('custom-modal-overlay');
+        if (inventoryModal) {
+            const modalTitleElement = inventoryModal.querySelector('#custom-modal-content h3');
+            if (modalTitleElement && modalTitleElement.textContent === "Backpack" && data.inventory_list) {
+                console.log("Inventory modal is open. Refreshing grid.");
+                renderOrUpdateModalBackpackGrid(data.inventory_list);
+            }
+        }
 
         // Call the component function to update the Dynamic Header
         updateDynamicHeaderComponent(data); // Pass the whole data object, component will pick what it needs

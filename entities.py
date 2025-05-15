@@ -47,6 +47,9 @@ class Player:
         }
         self.is_paused = False
         self.visited_locations = set() # To store IDs of visited locations
+        self.preferences = {
+            "auto_equip_from_inventory_panel_enabled": False
+        }
 
     def _recalculate_derived_stats(self, items_master_data):
         """Recalculates derived stats based on base stats, class/species, and equipment."""

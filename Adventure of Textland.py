@@ -730,6 +730,9 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             if not hasattr(player, 'hp'): player.hp = 0
             if not hasattr(player, 'max_hp'): player.max_hp = 0
             if not hasattr(player, 'inventory'): player.inventory = []
+            if not hasattr(player, 'preferences'):
+                player.preferences = {"auto_equip_from_inventory_panel_enabled": False}
+
             player.game_active = False # Mark as not fully active if we had to reset
 
         game_response = {
@@ -758,7 +761,10 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 "available_actions": [], # Initialize available_actions
                 "available_exits": [], # For dynamic go buttons
                 "current_zone_map_data": None, # Initialize for the side panel zone map
-                "available_exits": [] # For dynamic go buttons
+                "available_exits": [], # For dynamic go buttons
+                # Include player preferences in the response
+                "player_preferences": player.preferences if hasattr(player, 'preferences') else {"auto_equip_from_inventory_panel_enabled": False},
+
             # "dialogue_npc_id": None, 
             # "dialogue_options_pending": {}, 
         }
@@ -1070,6 +1076,58 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             current_loc_id_for_unequip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.")
+        elif action.startswith('set_player_preference '):
+            # Handle setting a player preference from the frontend
+            action_parts = action.split(' ', 2) # Split into verb, pref_name, value
+            if len(action_parts) == 3:
+                pref_name = action_parts[1]
+                pref_value_str = action_parts[2]
+
+                if pref_name == "auto_equip_from_inventory_panel_enabled":
+                    new_value = pref_value_str.lower() == 'true'
+                    if hasattr(player, 'preferences'):
+                        player.preferences[pref_name] = new_value
+                        save_player_data(player, reason_for_save=f"Preference '{pref_name}' updated via web")
+                        game_response["message"] = f"Preference '{pref_name}' set to {new_value}."
+                    else:
+                         game_response["message"] = f"Error: Player preferences not available."
+                else:
+                    game_response["message"] = f"Unknown preference: '{pref_name}'."
+            else:
+                game_response["message"] = "Invalid 'set_player_preference' format. Expected 'set_player_preference <name> <value>'."
+
+        elif action == 'auto_equip_inventory':
+            # Iterate through inventory and auto-equip items if slots are empty
+            items_auto_equipped = []
+            # Iterate over a copy of the inventory because equip_item modifies the list
+            for item_id_to_check in list(player.inventory): 
+                item_details = items_data.get(item_id_to_check)
+                if item_details and "equip_slot" in item_details:
+                    equip_slot = item_details["equip_slot"]
+                    target_slot = None
+
+                    # Handle trinkets needing specific slots
+                    if equip_slot == "trinket":
+                         if player.equipment.get("trinket1") is None: target_slot = "trinket1"
+                         elif player.equipment.get("trinket2") is None: target_slot = "trinket2"
+                         # If both trinket slots are full, target_slot remains None
+                    else:
+                        # For other slots, the target slot is the item's equip_slot
+                        target_slot = equip_slot
+
+                    # Check if the target slot is empty
+                    if target_slot and player.equipment.get(target_slot) is None:
+                        # Equip the item
+                        equip_message = player.equip_item(item_id_to_check, target_slot, items_data, log_event_func=log_game_event)
+                        items_auto_equipped.append(item_details.get("name", item_id_to_check.replace("_", " ")))
+                        # equip_item already handles removing from inventory and recalculating stats
+                        # No need to manually remove from inventory here
+
+            if items_auto_equipped:
+                game_response["message"] = "Automatically equipped: " + ", ".join(items_auto_equipped) + "."
+            else:
+                game_response["message"] = "No suitable items in inventory could be automatically equipped to empty slots."
+            # Location data will be populated by the final assembly logic
 
         elif action.startswith('use_item_'): # New handler for using items from inventory
             item_id_to_use = action.split('use_item_', 1)[1]
@@ -1289,6 +1347,23 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
         game_response["player_species_name"] = species_data.get(player.species_id, {}).get("name", "N/A")
         game_response["player_attack_power"] = player.attack_power
         
+        # Always populate the full inventory list for the modal refresh logic
+        player_inventory_for_response = player.inventory
+        game_response["inventory_list"] = [
+            {
+                "id": item_id,
+                "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " ")),
+                "type": items_data.get(item_id, {}).get("type"),
+                "equip_slot": items_data.get(item_id, {}).get("equip_slot")
+            }
+            for item_id in player_inventory_for_response
+        ]
+
+        # Ensure player_preferences is always present and up-to-date
+        # This might be redundant if already set in initial game_response and not overridden,
+        # but it's a good safeguard.
+        game_response["player_preferences"] = player.preferences if hasattr(player, 'preferences') else {"auto_equip_from_inventory_panel_enabled": False}
+        
         # Populate equipped items names
         game_response["player_equipment"] = {}
         player_equipment_data = player.equipment
@@ -1361,6 +1436,22 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
         # game_response["current_zone_map_data"] = get_world_map_data_for_api(player.visited_locations, locations) # This is already populated earlier
         else: # map_type is "zone" or other
             # Populate available_exits from zone map location data (this was done earlier, ensure it's not overwritten if not city)
+            # Ensure player preferences are always included in the final response
+            player_inventory_for_response = player.inventory
+            game_response["inventory_list"] = [
+                {
+                    "id": item_id,
+                    "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " ")),
+                    "type": items_data.get(item_id, {}).get("type"),
+                    "equip_slot": items_data.get(item_id, {}).get("equip_slot")
+                }
+                for item_id in player_inventory_for_response
+            ]
+
+            # This is already done in the initial game_response dict, but good to double-check
+            # if any action handlers might overwrite it.
+            game_response["player_preferences"] = player.preferences if hasattr(player, 'preferences') else {"auto_equip_from_inventory_panel_enabled": False}
+
             if not game_response.get("available_exits"): # If not already set by city logic
                  game_response["available_exits"] = list(current_location_data_for_response.get("exits", {}).keys())
             
@@ -1474,7 +1565,12 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 "npcs_in_room": [], # Will be populated
                 "current_zone_map_data": None # Initialize
             }
+            # Include player preferences in the initial scene data
+            initial_scene_data["player_preferences"] = player.preferences if hasattr(player, 'preferences') else {"auto_equip_from_inventory_panel_enabled": False}
+
             # Manually populate features and items for the very first response after creation
+            # ... (rest of the manual population logic) ...
+
             current_loc_data = locations.get(start_room_id, {})
             features_in_room = current_loc_data.get("features", {})
             for f_id, f_data in features_in_room.items():
@@ -1550,7 +1646,10 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 "interactable_features": [],
                 "room_items": [],
                 "npcs_in_room": [],
-                "current_zone_map_data": None # Initialize
+                "current_zone_map_data": None, # Initialize
+                # Include player preferences in the loaded scene data
+                "player_preferences": player.preferences if hasattr(player, 'preferences') else {"auto_equip_from_inventory_panel_enabled": False},
+
             }
 
             features_in_room = current_loc_data.get("features", {})
@@ -1624,7 +1723,10 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 "interactable_features": [], # Populate these like in process_game_action
                 "room_items": [],
                 "npcs_in_room": [],
-                "current_zone_map_data": None # Initialize
+                "current_zone_map_data": None, # Initialize
+                # Include player preferences in the loaded scene data
+                "player_preferences": player.preferences if hasattr(player, 'preferences') else {"auto_equip_from_inventory_panel_enabled": False},
+
             }
             # Populate features and items (similar to process_game_action_route's final assembly)
             features_in_room = current_loc_data.get("features", {})
