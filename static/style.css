@@ -117,13 +117,20 @@ button:hover { background-color: #0056b3; }
     background-color: transparent; /* Or a subtle gradient */
     border: none; /* Or a subtle inner border */
     color: #ddd;
-    font-size: 1.8em; /* Adjust for emoji size */
+    font-size: 1.8em; /* Default emoji size for larger slots */
     cursor: pointer;
     padding: 0;
     display: flex;
     justify-content: center;
     align-items: center;
     transition: background-color 0.2s;
+}
+
+/* Specific font size for the smaller save button icon */
+#action-slot-save button#dedicated-save-button {
+    font-size: 1.6em; /* Enlarged font size for the 48x48 slot */
+    /* Adjust line-height to help with vertical centering of the emoji */
+    line-height: 48px; /* Match the slot height, or adjust slightly */
 }
 
 .action-slot button:hover {
