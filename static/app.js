@@ -342,6 +342,7 @@ async function submitCharacterCreation(predefinedName = null, predefinedGender =
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, charName);
         gameIsActiveForInput = true;
         setupCommandNexus(); // Setup Command Nexus when game starts
+        setupVPad(); // Setup VPad
     } catch (error) {
         const errorMessage = `Error creating character: ${error.message || error}`;
         console.error(errorMessage, error);
@@ -407,6 +408,7 @@ async function handleLoadCharacter(characterName) {
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName);
         gameIsActiveForInput = true;
         setupCommandNexus(); // Setup Command Nexus when game loads
+        setupVPad(); // Setup VPad
     } catch (error) {
         const errorMessage = `Error loading character '${characterName}': ${error.message || error}`;
         console.error(errorMessage, error);
@@ -453,6 +455,7 @@ async function attemptResumeSession(characterName) {
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName); // Re-affirm character
         gameIsActiveForInput = true;
         setupCommandNexus(); // Setup Command Nexus when session resumes
+        setupVPad(); // Setup VPad
 
     } catch (error) {
         console.error("Error resuming session directly, trying full load:", error);
@@ -1178,6 +1181,7 @@ function displaySceneData(data, actionStringEcho = null) {
     updateActionButtonsComponent(data.available_actions); // For general actions like "Enter City", called AFTER exit buttons
 
     updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
+    updateVPadComponent(data); // Update VPad based on new data
 
     // Update the Inventory Modal Component (handles opening if action was 'inventory')
     updateInventoryModalComponent(data, actionStringEcho);
@@ -1353,4 +1357,48 @@ function appendMessageToOutput(messageText, className = null) {
     if (className) p_msg.classList.add(className);
     outputElement.appendChild(p_msg);
     outputElement.scrollTop = outputElement.scrollHeight;
+}
+
+// Add a flag for vpad setup, similar to commandNexusSetup
+let vpadSetup = false;
+
+// ... (near your other setup functions like setupCommandNexus) ...
+
+function setupVPad() {
+    if (vpadSetup) return;
+
+    const vpadNorth = document.getElementById('vpad-north');
+    const vpadSouth = document.getElementById('vpad-south');
+    const vpadEast = document.getElementById('vpad-east');
+    const vpadWest = document.getElementById('vpad-west');
+    const vpadCenter = document.getElementById('vpad-center-action');
+
+    if (vpadNorth) vpadNorth.onclick = () => performAction('go north');
+    if (vpadSouth) vpadSouth.onclick = () => performAction('go south');
+    if (vpadEast) vpadEast.onclick = () => performAction('go east');
+    if (vpadWest) vpadWest.onclick = () => performAction('go west');
+    if (vpadCenter) vpadCenter.onclick = () => performAction('enter city'); // Or whatever action it's for
+
+    if (vpadNorth || vpadSouth || vpadEast || vpadWest || vpadCenter) {
+        vpadSetup = true;
+    }
+}
+
+function updateVPadComponent(data) {
+    const vpadNorth = document.getElementById('vpad-north');
+    const vpadSouth = document.getElementById('vpad-south');
+    const vpadEast = document.getElementById('vpad-east');
+    const vpadWest = document.getElementById('vpad-west');
+    const vpadCenter = document.getElementById('vpad-center-action');
+
+    const availableExits = data.available_exits || [];
+    const availableActions = data.available_actions || [];
+
+    if (vpadNorth) vpadNorth.style.display = availableExits.includes('north') ? 'flex' : 'none';
+    if (vpadSouth) vpadSouth.style.display = availableExits.includes('south') ? 'flex' : 'none';
+    if (vpadEast) vpadEast.style.display = availableExits.includes('east') ? 'flex' : 'none';
+    if (vpadWest) vpadWest.style.display = availableExits.includes('west') ? 'flex' : 'none';
+    
+    // Assuming "enter city" is the action for the center button
+    if (vpadCenter) vpadCenter.style.display = availableActions.includes('enter city') ? 'flex' : 'none';
 }

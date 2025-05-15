@@ -81,23 +81,36 @@
             <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
         
             <!-- Container for bottom bars -->
-            <div id="bottom-ui-elements-container" style="display: flex; justify-content: center; align-items: flex-end; position: fixed; bottom: 10px; left: 0; right: 0; z-index: 100;">
-                <!-- Command Nexus (ElvUI-style 8 slots) -->
-                <div id="command-nexus-container"> <!-- Renamed from bottom-action-bar-container for clarity -->
-                    <!-- Slots will be added/managed by JavaScript -->
-                    <div class="action-slot" id="action-slot-1"></div>
-                    <div class="action-slot" id="action-slot-2"></div>
-                    <div class="action-slot" id="action-slot-3"></div>
-                    <div class="action-slot" id="action-slot-4"></div>
-                    <div class="action-slot" id="action-slot-5"></div>
-                    <div class="action-slot" id="action-slot-6"></div> <!-- This slot is now empty -->
-                    <div class="action-slot" id="action-slot-7"><button id="action-slot-worldmap-button">🗺️</button></div> <!-- World Map slot -->
-                    <div class="action-slot" id="action-slot-8"><button id="action-slot-backpack-button">🎒</button></div> <!-- Backpack slot -->
+            <div id="bottom-ui-elements-container" style="display: flex; flex-direction: column; align-items: center; gap: 10px; position: fixed; bottom: 10px; left: 0; right: 0; z-index: 100;">
+                
+                <!-- VPad Container -->
+                <div id="vpad-container" style="display: grid; grid-template-areas: '. north .' 'west center east' '. south .'; grid-template-columns: 50px 50px 50px; grid-template-rows: 50px 50px 50px; gap: 5px; align-items: center; justify-items: center;">
+                    <button id="vpad-north" class="vpad-button vpad-arrow" style="grid-area: north; display: none;">↑</button>
+                    <button id="vpad-west" class="vpad-button vpad-arrow" style="grid-area: west; display: none;">←</button>
+                    <button id="vpad-center-action" class="vpad-button vpad-center" style="grid-area: center; display: none;">E</button> <!-- E for Enter City -->
+                    <button id="vpad-east" class="vpad-button vpad-arrow" style="grid-area: east; display: none;">→</button>
+                    <button id="vpad-south" class="vpad-button vpad-arrow" style="grid-area: south; display: none;">↓</button>
                 </div>
 
-                <!-- Dedicated Save Button Bar (1 slot) -->
-                <div id="save-button-bar-container" style="margin-left: 15px;"> <!-- Add some spacing -->
-                    <div class="action-slot" id="action-slot-save"><button id="dedicated-save-button" style="display: none;" title="Save progress and set respawn point">💾</button></div>
+                <!-- Wrapper for Command Nexus and Save Bar to keep them side-by-side -->
+                <div id="main-hotbars-wrapper" style="display: flex; justify-content: center; align-items: flex-end;">
+                    <!-- Command Nexus (ElvUI-style 8 slots) -->
+                    <div id="command-nexus-container"> 
+                        <!-- Slots will be added/managed by JavaScript -->
+                        <div class="action-slot" id="action-slot-1"></div>
+                        <div class="action-slot" id="action-slot-2"></div>
+                        <div class="action-slot" id="action-slot-3"></div>
+                        <div class="action-slot" id="action-slot-4"></div>
+                        <div class="action-slot" id="action-slot-5"></div>
+                        <div class="action-slot" id="action-slot-6"></div> <!-- This slot is now empty -->
+                        <div class="action-slot" id="action-slot-7"><button id="action-slot-worldmap-button">🗺️</button></div> <!-- World Map slot -->
+                        <div class="action-slot" id="action-slot-8"><button id="action-slot-backpack-button">🎒</button></div> <!-- Backpack slot -->
+                    </div>
+
+                    <!-- Dedicated Save Button Bar (1 slot) -->
+                    <div id="save-button-bar-container" style="margin-left: 15px;"> 
+                        <div class="action-slot" id="action-slot-save"><button id="dedicated-save-button" style="display: none;" title="Save progress and set respawn point">💾</button></div>
+                    </div>
                 </div>
             </div>
         </div>

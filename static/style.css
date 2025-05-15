@@ -141,3 +141,43 @@ button:hover { background-color: #0056b3; }
 .action-slot button:active {
     background-color: #555;
 }
+
+/* VPad Styling */
+#vpad-container {
+    /* Styles are mostly inline in HTML for grid structure, 
+       but you can add background, border, etc. here if desired */
+    /* Example: background-color: rgba(0,0,0,0.1); border-radius: 10px; padding: 5px; */
+}
+
+.vpad-button {
+    width: 100%; /* Fill grid cell */
+    height: 100%; /* Fill grid cell */
+    border: 1px solid #777;
+    background-color: #444;
+    color: #eee;
+    font-size: 1.5em; /* Adjust for arrow/icon size */
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.2s;
+    box-sizing: border-box; /* Important for width/height including padding/border */
+}
+
+.vpad-button:hover {
+    background-color: #555;
+}
+
+.vpad-button:active {
+    background-color: #666;
+}
+
+.vpad-center {
+    border-radius: 50%; /* Make it a circle */
+    font-weight: bold;
+}
+
+.vpad-arrow {
+    border-radius: 5px; /* Slightly rounded corners for arrows */
+}
+
