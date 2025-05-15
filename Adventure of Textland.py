@@ -616,12 +616,21 @@ def handle_environmental_interaction(feature_id, action_verb):
     elif chosen_outcome.get("type") == "reveal_items" and feature_id == "worn_crate":
         if feature.get("closed"):
             items_in_crate = list(feature.get("contains_on_open", [])) # Make a copy
+            print("You pry open the crate.") # Initial message
+
             if items_in_crate:
-                print("You pry open the crate and find some items inside!") # Updated message
-                
-                for item_id in items_in_crate: # Iterate through items to award them
-                    game_logic.award_item_to_player(player, items_data, item_id, source=f"opened_{feature_id}", log_event_func=log_game_event)
-                    # acquired_item_names.append(items_data.get(item_id, {}).get("name", item_id)) # Not strictly needed if award_item prints
+                print("Inside, you find:")
+                for item_id in items_in_crate:
+                    item_data_from_master_list = items_data.get(item_id, {}) # Get data from items.json
+                    item_name_for_display = item_data_from_master_list.get("name", item_id.replace("_", " "))
+
+                    if item_id == "small_pouch_of_coins":
+                        coin_value = item_data_from_master_list.get("value", 0) # Get value from items.json
+                        player.add_coins(coin_value, log_event_func=log_game_event, source=f"opened_worn_crate_terminal_{item_id}")
+                        # player.add_coins already prints terminal feedback for the coins gained
+                    else:
+                        game_logic.award_item_to_player(player, items_data, item_id, source=f"opened_{feature_id}", log_event_func=log_game_event)
+                        print(f"  - {item_name_for_display}") # Terminal feedback for non-coin items
                 
                 if player.current_location_id == "generic_start_room": # Specific message for starter crate
                      print("Among the items, you see a map of a nearby settlement and a small pouch of coins.") # Message adjusted
@@ -1060,7 +1069,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             # Ensure current location data is still part of the response
             current_loc_id_for_unequip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
-            game_response["description"] = locations.get(current_loc_id_for_sort, {}).get("description", "An unfamiliar place.")
+            game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.")
 
         elif action.startswith('use_item_'): # New handler for using items from inventory
             item_id_to_use = action.split('use_item_', 1)[1]
