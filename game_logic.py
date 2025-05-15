@@ -49,21 +49,31 @@ def apply_character_choices_and_stats(player_obj, species_id, class_id, char_nam
     return True
 
 def award_item_to_player(player_obj, items_master_data, item_id_to_give, source="unknown", log_event_func=None):
+    """Awards an item to the player's inventory, handling special cases like currency pouches."""
     if not isinstance(item_id_to_give, str):
         error_msg = "[Error] Invalid item_id provided to award_item_to_player."
         print(error_msg)
         return error_msg 
-    player_obj.add_item_to_inventory(item_id_to_give)
+
     item_details = items_master_data.get(item_id_to_give, {})
     display_name = item_details.get("name", item_id_to_give.replace("_", " ").capitalize())
-    success_msg = f"You have acquired: {display_name}."
-    print(success_msg)
-    if log_event_func:
-        log_event_func("item_acquisition", {
-            "item_id": item_id_to_give, "item_name": display_name, "source": source, "player_name": player_obj.name,
-            "location_id": player_obj.current_location_id
-        })
-    return success_msg
+    message = ""
+
+    if item_id_to_give == "small_pouch_of_coins":
+        # Special case: Convert pouch to coins immediately
+        coin_value = item_details.get("value", 0) # Get value from item data
+        player_obj.add_coins(coin_value, log_event_func=log_event_func, source=f"auto_converted_{item_id_to_give}_from_{source}")
+        # player_obj.add_coins already prints terminal feedback
+        message = f"You found a {display_name} and gained {coin_value} coins."
+        # The pouch itself is not added to inventory
+    else:
+        # Standard item acquisition: add to inventory
+        player_obj.add_item_to_inventory(item_id_to_give)
+        message = f"You have acquired: {display_name}."
+        print(message) # Print acquisition message for terminal
+        if log_event_func:
+            log_event_func("item_acquisition", {"item_id": item_id_to_give, "item_name": display_name, "source": source, "player_name": player_obj.name, "location_id": player_obj.current_location_id})
+    return message
 
 def remove_item_from_player_inventory(player_obj, items_master_data, item_id_to_remove, source="unknown", log_event_func=None):
     if player_obj.remove_item_from_inventory(item_id_to_remove):

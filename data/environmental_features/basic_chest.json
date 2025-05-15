@@ -1,0 +1,17 @@
+{
+  "basic_chest_model": {
+    "description_closed": "A simple wooden chest, currently closed.",
+    "description_opened": "The wooden chest is open and empty.",
+    "closed": true,
+    "actions": {
+      "open": {
+        "outcomes": [
+          {
+            "type": "reveal_items",
+            "message": "You open the chest."
+          }
+        ]
+      }
+    }
+  }
+}

@@ -205,16 +205,8 @@
         "exits": {"out": "eldoria_city_node"},
         "items": [],
         "features": {
-            "worn_crate": {
-                "description_closed": "A worn wooden crate. It seems easy to open.",
-                "description_opened": "The crate is now open and empty.",
-                "closed": true,
-                "actions": {
-                    "open": {
-                        "outcomes": [{"type": "reveal_items", "message": "You pry open the crate."}]
-                    }
-                },
-                "contains_on_open": []
+            "worn_crate": { 
+                "model_id": "starter_worn_crate_model"
             }
         },
         "npcs": {}

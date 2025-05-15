@@ -54,6 +54,7 @@ items_data = {}
 city_maps_data = {} # To store loaded city map details
 species_data = {}
 classes_data = {}
+environmental_feature_models = {} # New: To store loaded environmental feature models
 
 # Initialize player as an instance of the Player class
 player = Player()
@@ -90,10 +91,15 @@ def trace_function_calls(func):
         return func(*args, **kwargs)
     return wrapper
 
-def _load_json_data_from_file(filename, data_description):
-    """Helper function to load data from a JSON file in the DATA_DIR."""
-    filepath = os.path.join(DATA_DIR, filename)
+def _load_and_handle_json_errors(filepath, data_description):
+    """Internal helper to load a single JSON file and handle common errors."""
     try:
+        # Ensure the directory of the file exists before trying to open the file
+        # This is more robust for files in subdirectories.
+        file_dir = os.path.dirname(filepath)
+        if file_dir: # Check if there's a directory part (not a top-level file in DATA_DIR)
+            os.makedirs(file_dir, exist_ok=True)
+
         os.makedirs(DATA_DIR, exist_ok=True) # Ensure data directory exists
         if not os.path.exists(filepath):
             print(f"[WARNING] Data file not found: {filepath}. Attempting to create with empty data for {data_description}.")
@@ -117,9 +123,36 @@ def _load_json_data_from_file(filename, data_description):
         print(f"[ERROR] An unexpected error occurred while loading {filepath}: {e}. Returning empty data for {data_description}.")
         return {}
 
+def _load_json_data_from_file(filename, data_description):
+    """Helper function to load data from a JSON file directly in the DATA_DIR."""
+    filepath = os.path.join(DATA_DIR, filename)
+    return _load_and_handle_json_errors(filepath, data_description)
+
+def _load_json_data_from_directory(directory_name, data_description):
+    """Helper function to load data from all JSON files in a subdirectory of DATA_DIR."""
+    dir_path = os.path.join(DATA_DIR, directory_name)
+    all_data = {}
+    try:
+        if not os.path.exists(dir_path):
+            print(f"[WARNING] Data directory not found: {dir_path}. No {data_description} will be loaded.")
+            os.makedirs(dir_path, exist_ok=True) # Create it for future use
+            return {}
+
+        for filename in os.listdir(dir_path):
+            if filename.endswith(".json"):
+                filepath = os.path.join(dir_path, filename)
+                file_data = _load_and_handle_json_errors(filepath, f"{data_description} from {filename}")
+                all_data.update(file_data) # Assumes top-level keys in JSON files are unique model IDs
+
+        print(f"[Game Data] Successfully loaded {len(all_data)} {data_description} from {dir_path}")
+        return all_data
+    except Exception as e:
+        print(f"[ERROR] An unexpected error occurred while loading {data_description} from {dir_path}: {e}. Returning empty data.")
+        return {}
+
 def load_all_game_data():
     """Loads all game data from their base structures or JSON files."""
-    global locations, zone_layouts, items_data, species_data, classes_data, city_maps_data # Add city_maps_data
+    global locations, zone_layouts, items_data, species_data, classes_data, city_maps_data, environmental_feature_models
     locations = _load_json_data_from_file("locations.json", "Locations")
     zone_layouts = _load_json_data_from_file("zone_layouts.json", "Zone Layouts")
     items_data = _load_json_data_from_file("items.json", "Items")
@@ -132,6 +165,26 @@ def load_all_game_data():
         map_details = _load_city_map_data_from_file(city_id)
         if map_details:
             city_maps_data[city_id] = map_details
+
+    # Load environmental feature models
+    environmental_feature_models = _load_json_data_from_directory("environmental_features", "Environmental Feature Models")
+
+    # Instantiate features in locations using models
+    for loc_id, loc_data in list(locations.items()): # Iterate over a copy if modifying dict
+        if "features" in loc_data and isinstance(loc_data["features"], dict):
+            instantiated_features = {}
+            for feature_instance_id, instance_data in loc_data["features"].items():
+                model_id = instance_data.get("model_id")
+                if model_id and model_id in environmental_feature_models:
+                    # Start with a deep copy of the model data to avoid modifying the original model
+                    instantiated_feature = json.loads(json.dumps(environmental_feature_models[model_id])) # Deep copy
+                    # Override with instance-specific data (excluding model_id itself)
+                    override_data = {k: v for k, v in instance_data.items() if k != "model_id"}
+                    instantiated_feature.update(override_data)
+                    instantiated_features[feature_instance_id] = instantiated_feature
+                else: # If no model_id or model not found, keep the original instance data
+                    instantiated_features[feature_instance_id] = instance_data.copy() # Important to copy
+            locations[loc_id]["features"] = instantiated_features
 
     # Convert NPC dictionaries in locations to NPC objects
     for loc_id, loc_data in locations.items():
@@ -163,6 +216,8 @@ def load_all_game_data():
         print("[ERROR] Classes data is empty after reload!")
     if not zone_layouts:
         print("[ERROR] Zone layouts data is empty after reload!")
+    if not environmental_feature_models: # Add check for the new models
+        print("[WARNING] Environmental feature models data is empty. This is normal if you haven't created any models yet.")
 
 # --- City Map Data Loading ---
 def _load_city_map_data_from_file(city_id):
@@ -586,33 +641,29 @@ def handle_environmental_interaction(feature_id, action_verb):
             feature["contains_on_open"] = [] # Empty the crate's internal list
             feature["closed"] = False
             player.flags["found_starter_items"] = True # Still set this flag
+
+            # --- Conditional Auto-Teleport Logic (Specific to starter crate) ---
+            # This logic remains as per your previous request for this specific crate
             if player.current_location_id == "generic_start_room":
                 start_room_data = locations.get("generic_start_room", {})
-                exit_destination_id = start_room_data.get("exits", {}).get("out") # Should be "eldoria_city_node"
+                exit_destination_id = start_room_data.get("exits", {}).get("out")
 
-                if exit_destination_id == "eldoria_city_node":
+                if exit_destination_id == "eldoria_city_node": # Check if the 'out' exit leads to Eldoria entrance
                     # Transition directly into Eldoria's detailed city map
                     eldoria_city_map_details = city_maps_data.get("eldoria")
-                    # Define the specific coordinates from the starter area exit
-                    target_city_x = 1 
-                    target_city_y = 1
-                    
-                    if eldoria_city_map_details:
+                    # Use the entry point defined for the starter area teleport
+                    target_entry_point_key = "from_starter_area_teleport" # Ensure this key exists in eldoria_city_map.json
+                    entry_coords = eldoria_city_map_details.get("entry_points", {}).get(target_entry_point_key, {"x": 1, "y": 1}) # Fallback coords
+
+                    if eldoria_city_map_details and entry_coords:
                         print("\nThe way out of the chamber seems clear now. You step outside and find yourself within the city of Eldoria.")
                         player.last_zone_location_id = exit_destination_id # Store "eldoria_city_node"
                         player.current_map_type = "city"
                         player.current_city_id = "eldoria"
-                        player.current_city_x = target_city_x
-                        player.current_city_y = target_city_y
+                        player.current_city_x = entry_coords["x"]
+                        player.current_city_y = entry_coords["y"]
                         player.current_location_id = exit_destination_id # Keep context of the zone map node
-                        log_game_event("auto_move_to_city_map", {"from": "generic_start_room", "to_city": "eldoria", "coords": f"({target_city_x},{target_city_y})", "reason": "opened_starter_crate_terminal", "player_name": player.name})
-                    # else: # Fallback if eldoria_city_map.json wasn't loaded
-                    #     print(f"[ERROR] Eldoria city map data not found. Moving to {exit_destination_id} on zone map instead.")
-                    #     player.move_to(exit_destination_id)
-                elif exit_destination_id: # If it's a different exit, do a normal zone move
-                    print("\nThe way out of the chamber seems clear now. You step outside.")
-                    player.move_to(exit_destination_id)
-                    log_game_event("auto_move", {"from": "generic_start_room", "to": exit_destination_id, "reason": "opened_starter_crate_terminal", "player_name": player.name})
+                        log_game_event("auto_move_to_city_map", {"from": "generic_start_room", "to_city": "eldoria", "coords": f"({entry_coords['x']},{entry_coords['y']})", "reason": "opened_starter_crate_terminal", "player_name": player.name})
 
     elif chosen_outcome.get("type") == "stat_change" and chosen_outcome.get("stat") == "hp":
         player.heal(chosen_outcome.get("amount", 0)) # Use method
@@ -943,55 +994,52 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             crate = locations["generic_start_room"]["features"]["worn_crate"]
             if crate.get("closed"):
                 game_response["message"] = "You pry open the crate." 
-                items_in_crate = list(crate.get("contains_on_open", []))
-                found_items_desc_web = []
+                items_in_crate = list(crate.get("contains_on_open", [])) # Make a copy of items to be revealed
+
+                acquired_item_names_for_message = []
                 if items_in_crate:
+                    # Add a message indicating contents are being revealed
+                    game_response["message"] += "\nInside, you find:"
+
                     for item_id in items_in_crate:
-                        locations[player.current_location_id].setdefault("items", []).append(item_id)
-                        found_items_desc_web.append(items_data.get(item_id, {}).get("name", item_id))
-                    game_response["message"] += f"\nInside, you find: {', '.join(found_items_desc_web)}."
+                        # Award item directly to player's inventory
+                        acquisition_msg = game_logic.award_item_to_player(
+                            player, items_data, item_id, 
+                            source=f"opened_worn_crate_web_{player.current_location_id}", 
+                            log_event_func=log_game_event
+                        ) # award_item_to_player already logs and prints to terminal
+                        # For web UI, the message is built separately below
+
+                    # The message about finding items is now built by award_item_to_player
+                    # We can add a specific message for the starter crate contents here if needed
                     if player.current_location_id == "generic_start_room": # Specific message for starter crate
                         game_response["message"] += "\nAmong the items, you find a map of a nearby settlement and a small pouch of coins."
-                
                 crate["contains_on_open"] = [] 
                 crate["closed"] = False
                 player.flags["found_starter_items"] = True
-                if player.current_location_id == "generic_start_room":
-                    start_room_data_web = locations.get("generic_start_room", {})
-                    exit_destination_id_web = start_room_data_web.get("exits", {}).get("out") # Should be "eldoria_city_node"
 
-                    if exit_destination_id_web == "eldoria_city_node":
+                # --- Conditional Auto-Teleport Logic (Specific to starter crate) ---
+                # This logic remains as per your previous request for this specific crate
+                if player.current_location_id == "generic_start_room": # Check for the specific crate instance
+                    start_room_data_web = locations.get("generic_start_room", {})
+                    exit_destination_id_web = start_room_data_web.get("exits", {}).get("out")
+
+                    if exit_destination_id_web == "eldoria_city_node": # Check if the 'out' exit leads to Eldoria entrance
                         eldoria_city_map_details_web = city_maps_data.get("eldoria")
-                        target_city_x_web = 1
-                        target_city_y_web = 1
-                        if eldoria_city_map_details_web:
+                        # Use the entry point defined for the starter area teleport
+                        target_entry_point_key_web = "from_starter_area_teleport" # Ensure this key exists in eldoria_city_map.json
+                        entry_coords_web = eldoria_city_map_details_web.get("entry_points", {}).get(target_entry_point_key_web, {"x": 1, "y": 1}) # Fallback
+
+                        if eldoria_city_map_details_web and entry_coords_web:
                             game_response["message"] += "\nThe way out of the chamber seems clear now. You step outside and find yourself within the city of Eldoria."
                             player.last_zone_location_id = exit_destination_id_web
                             player.current_map_type = "city"
                             player.current_city_id = "eldoria"
-                            player.current_city_x = target_city_x_web
-                            player.current_city_y = target_city_y_web
+                            player.current_city_x = entry_coords_web["x"]
+                            player.current_city_y = entry_coords_web["y"]
                             player.current_location_id = exit_destination_id_web # Keep zone context
-                            log_game_event("auto_move_to_city_map", {"from": "generic_start_room", "to_city": "eldoria", "coords": f"({target_city_x_web},{target_city_y_web})", "reason": "opened_starter_crate_web", "player_name": player.name})
-                            
-                            # Enhanced server-side console log for scene data after teleport
-                            log_msg_parts = [
-                                f"current_location_id: {player.current_location_id}",
-                                f"map_type: {player.current_map_type}",
-                                f"city_id: {player.current_city_id}",
-                                f"city_coords: ({player.current_city_x},{player.current_city_y})"
-                            ]
-                            city_cell_desc = "N/A"
-                            if eldoria_city_map_details_web: # Already checked this is not None
-                                city_cell_desc = eldoria_city_map_details_web["cells"][player.current_city_y][player.current_city_x].get("description", "N/A")
-                            log_msg_parts.append(f"city_cell_description: '{city_cell_desc}'")
-                            print(f"[SERVER_LOG] Player teleported from starter. {', '.join(log_msg_parts)}")
-                            
-                            # The frontend will need to handle the map_type change in the response
-                    # else: # Fallback for web if not eldoria_city_node
-                    #     player.move_to(exit_destination_id_web) # Normal zone move
-                    #     game_response["message"] += "\nThe way out of the chamber seems clear now. You step outside."
-                    #     log_game_event("auto_move", {"from": "generic_start_room", "to": exit_destination_id_web, "reason": "opened_starter_crate_web", "player_name": player.name})
+                            log_game_event("auto_move_to_city_map", {"from": "generic_start_room", "to_city": "eldoria", "coords": f"({entry_coords_web['x']},{entry_coords_web['y']})", "reason": "opened_starter_crate_web", "player_name": player.name})
+
             else:
                 game_response["message"] = "The crate is already open and empty."
         elif action.startswith('unequip '):
@@ -1012,6 +1060,74 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             # Ensure current location data is still part of the response
             current_loc_id_for_unequip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
+            game_response["description"] = locations.get(current_loc_id_for_sort, {}).get("description", "An unfamiliar place.")
+
+        elif action.startswith('use_item_'): # New handler for using items from inventory
+            item_id_to_use = action.split('use_item_', 1)[1]
+
+            if item_id_to_use not in player.inventory:
+                game_response["message"] = f"You don't have {items_data.get(item_id_to_use, {}).get('name', item_id_to_use.replace('_',' '))} in your inventory."
+                # Location data will be populated by final assembly
+                return jsonify(game_response)
+
+            item_details = items_data.get(item_id_to_use)
+            # Check if the item has a 'use' action defined
+            if not item_details or "actions" not in item_details or "use" not in item_details["actions"]:
+                 game_response["message"] = f"You can't 'use' the {item_details.get('name', item_id_to_use.replace('_',' '))} in that way."
+                 # Location data will be populated by final assembly
+                 return jsonify(game_response)
+
+            use_action_details = item_details["actions"]["use"]
+            outcome_pool = use_action_details.get("outcomes", [])
+
+            # Append the action message if defined
+            if use_action_details.get("message"):
+                 game_response["message"] += use_action_details["message"] + "\n"
+
+            # Process outcomes (assuming simple sequential or first outcome for now)
+            if not outcome_pool:
+                 game_response["message"] += f"Using the {item_details.get('name', item_id_to_use.replace('_',' '))} seems to have no effect."
+                 # Location data will be populated by final assembly
+                 return jsonify(game_response)
+
+            # For simplicity, process all outcomes listed
+            for chosen_outcome in outcome_pool:
+                if chosen_outcome.get("message"):
+                    game_response["message"] += chosen_outcome["message"] + "\n" # Append outcome-specific message
+
+                if chosen_outcome.get("type") == "add_contained_currency":
+                    currency_value = chosen_outcome.get("value", 0)
+                    currency_type = chosen_outcome.get("currency_type", "coins") # Default to coins
+                    if currency_value > 0:
+                        # Assuming player only has 'coins' currency for now
+                        player.add_coins(currency_value, log_event_func=log_game_event, source=f"used_item_web_{item_id_to_use}")
+                        game_response["message"] += f"The {item_details.get('name', item_id_to_use.replace('_',' '))} yields {currency_value} {currency_type}.\n"
+                    else:
+                        game_response["message"] += f"The {item_details.get('name', item_id_to_use.replace('_',' '))} seems to be empty of currency.\n"
+
+                elif chosen_outcome.get("type") == "reveal_contained_items":
+                     items_to_reveal = chosen_outcome.get("items", [])
+                     if items_to_reveal:
+                         game_response["message"] += "Inside, you find:\n"
+                         for revealed_item_id in items_to_reveal:
+                             # award_item_to_player already logs and prints to terminal
+                             acquisition_msg = game_logic.award_item_to_player(player, items_data, revealed_item_id, source=f"used_item_web_{item_id_to_use}", log_event_func=log_game_event)
+                             # For web UI, add to the response message
+                             item_name = items_data.get(revealed_item_id, {}).get("name", revealed_item_id.replace("_"," "))
+                             game_response["message"] += f"- {item_name}\n"
+                     else:
+                         game_response["message"] += f"The {item_details.get('name', item_id_to_use.replace('_',' '))} seems to be empty of items.\n"
+
+                # Add other item use outcome types here (e.g., heal, buff, etc.)
+                elif chosen_outcome.get("type") == "heal":
+                    heal_amount = chosen_outcome.get("amount", 0)
+                    if heal_amount > 0:
+                        player.heal(heal_amount)
+                        game_response["message"] += f"You feel restored. Your HP is now {player.hp}/{player.max_hp}.\n"
+
+            # After processing outcomes, remove the container item from inventory
+            player.remove_item_from_inventory(item_id_to_use)
+            game_response["message"] += f"The {item_details.get('name', item_id_to_use.replace('_',' '))} is consumed." # Or "is now empty and discarded."
             game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.") # Fixed typo here
 
         elif action.startswith('equip '):
@@ -2303,6 +2419,472 @@ def process_command(full_command_input):
     else:
         potential_verb = command
         
+        # Check for 'exit city' command specifically
+        if command == "exit" and " ".join(args) == "city":
+             if player.current_map_type == "city":
+                 print(f"You leave {city_maps_data.get(player.current_city_id, {}).get('name', 'the city')} and return to the zone map.")
+                 player.current_map_type = "zone"
+                 # player.current_location_id is already set to the zone map entry point
+             else: print("You are not currently inside a city.")
+             return True # Command processed
+
+        potential_target = " ".join(args)
+        target_feature_id = None
+        for f_id in location_data.get("features", {}).keys():
+            if potential_target == f_id.replace("_", " "):
+                target_feature_id = f_id
+                break
+        if target_feature_id and potential_verb in location_data["features"][target_feature_id].get("actions", {}):
+            handle_environmental_interaction(target_feature_id, potential_verb)
+        else:
+            print(f"I don't understand '{full_command}'. Try 'look' or check commands.")
+    return True # Command processed
+
+def process_command(full_command_input):
+    full_command = full_command_input.lower().strip()
+    parts = full_command.split()
+    if not parts: return True
+    command = parts[0]
+    args = parts[1:]
+
+    if command == "!start":
+        if player.game_active: print("The game has already started!")
+        else:
+            initialize_game_state()
+        return True
+    elif command == "!start_browser":
+        launch_web_interface()
+        return True
+    elif command == "!save":
+        if not player.game_active:
+            print("Game not active. Cannot save.")
+            return True # Command processed, show scene again
+        current_zone = locations[player.current_location_id].get("zone")
+        if current_zone in CITY_ZONES:
+            save_player_data(player, reason_for_save="Game progress manually saved")
+        else:
+            print("You can only save your progress in a city.")
+        return True # Command processed, show scene again
+    elif command == "!reload_data":
+        print("Attempting to reload game data...")
+        load_all_game_data()
+        return True # Show scene again to reflect any changes
+    elif command == "!quit":
+        print(f"\nYou decide to end your adventure here. Farewell!" if player.game_active else "\nFarewell!")
+        return False
+    elif command == "worldmap":
+        display_world_map()
+        return True
+
+    if not player.game_active:
+        print(f"Unknown command: '{full_command}'. Type '!start' to begin.")
+        return True
+
+    if player.dialogue_npc_id and player.dialogue_options_pending:
+        npc_id = player.dialogue_npc_id
+        npc_object = locations[player.current_location_id]["npcs"][npc_id] # Get NPC object
+
+        if full_command == "leave":
+            print(f"You end the conversation with {npc_object.name}.")
+            player.end_dialogue() # Player object's method
+            return True
+
+        chosen_option_data = player.dialogue_options_pending.get(full_command)
+        if chosen_option_data:
+            print(f"\n> {chosen_option_data['text']}")
+            if chosen_option_data.get("response"):
+                print(f"{npc_object.name} says: \"{chosen_option_data['response']}\"")
+
+            if chosen_option_data.get("triggers_combat"):
+                player.end_dialogue() # End dialogue before starting combat
+                player.enter_combat(npc_id) # Player object's method
+            elif chosen_option_data.get("action_type") == "end_conversation":
+                player.end_dialogue() # Player object's method
+        else:
+            print("Invalid choice. Please type the number of the option or 'leave'.")
+        return True
+
+    if player.combat_target_id:
+        npc_id = player.combat_target_id
+        if npc_id not in locations[player.current_location_id]["npcs"]:
+            print(f"[Warning] Target {npc_id} seems to be gone. Ending combat.")
+            player.leave_combat() # Player object's method
+            return True
+
+        npc_object = locations[player.current_location_id]["npcs"][npc_id] # Get NPC object
+        action_taken = False
+
+        if command == "attack":
+            damage = player.attack_power
+            npc_object.take_damage(damage) # Use NPC method
+            print(f"You attack {npc_object.name} for {damage} damage.")
+            if not npc_object.is_alive(): # Use NPC method
+                handle_npc_defeat(npc_id)
+            action_taken = True
+        elif command == "special":
+            if not args: print("Which special move? (Specify the move like 'special power strike')")
+            else:
+                move_input = "_".join(args)
+                if move_input in player.special_moves:
+                    if player.special_cooldowns.get(move_input, 0) == 0:
+                        move_details = player.special_moves[move_input]
+                        damage = int(player.attack_power * move_details["damage_multiplier"])
+                        npc_object.take_damage(damage) # Use NPC method
+                        print(f"You use {move_details['name']} on {npc_object.name} for {damage} damage!")
+                        player.special_cooldowns[move_input] = move_details["cooldown_max"]
+                        if not npc_object.is_alive(): # Use NPC method
+                            handle_npc_defeat(npc_id)
+                        action_taken = True
+                    else:
+                        print(f"{player.special_moves[move_input]['name']} is on cooldown ({player.special_cooldowns[move_input]} turns left).")
+                else:
+                    print(f"You don't know a special move called '{' '.join(args)}'.")
+        elif command == "deflect":
+            player.set_deflecting(True) # Player object's method
+            print("You brace yourself, preparing to deflect the next attack.")
+            action_taken = True
+        elif command == "item":
+            if not args: print("Use which item?")
+            else:
+                item_name_input = " ".join(args)
+                item_id_to_use = None
+                for inv_item_id in player.inventory:
+                    if item_name_input == items_data.get(inv_item_id, {}).get("name", "").lower() or \
+                       item_name_input == inv_item_id.replace("_", " "):
+                        item_id_to_use = inv_item_id
+                        break
+
+                if item_id_to_use:
+                    item_detail = items_data.get(item_id_to_use)
+                    if item_detail and item_detail["type"] == "consumable" and item_detail["effect"] == "heal":
+                        heal_amount = item_detail["amount"]
+                        player.heal(heal_amount) # Use method
+                        player.remove_item_from_inventory(item_id_to_use) # Use method
+                        print(f"You use the {item_detail['name']} and restore {heal_amount} HP. You now have {player.hp}/{player.max_hp} HP.")
+                        action_taken = True
+                    else:
+                        print(f"You can't use the {item_name_input} in that way right now.")
+                else:
+                    print(f"You don't have a '{item_name_input}'.")
+        else:
+            print(f"Unknown combat command: '{command}'. Valid commands: attack, special, deflect, item.")
+
+        # After player action in combat, check if combat should continue (NPC still alive)
+        if action_taken and player.combat_target_id and player.game_active:
+            npc_combat_turn()
+        return True
+
+    # --- New Unequip Command Handler (Terminal) ---
+    # This is a basic terminal handler. The web handler is separate.
+    elif command == "unequip":
+        if not args: print("Unequip what? (Specify the item name)")
+        else:
+            item_name_input = " ".join(args)
+            # Find the item in equipped slots
+            item_id_to_unequip = None
+            slot_unequipped_from = None
+            for slot, item_id in player.equipment.items():
+                if item_id and (item_name_input == items_data.get(item_id, {}).get("name", "").lower() or item_name_input == item_id.replace("_", " ")):
+                    item_id_to_unequip = item_id
+                    slot_unequipped_from = slot
+                    break
+            if item_id_to_unequip:
+                unequip_message = player.unequip_item(slot_unequipped_from, items_data, log_event_func=log_game_event)
+                print(unequip_message)
+            else:
+                print(f"You don't have '{item_name_input}' equipped.")
+        return True # Command processed, show scene again
+    # --- End Unequip Command Handler (Terminal) ---
+
+    loc_id = player.current_location_id
+    location_data = locations[loc_id]
+
+    if command == "!map" or (command == "view" and " ".join(args) == "map scroll"): # Allow "view map scroll"
+        if command == "view" and "blank_map_scroll" not in player.inventory:
+            print("You don't have a map scroll to view.")
+            return True
+        if command == "view":
+            print("You unfurl the map scroll...")
+
+        draw_zone_map(player.current_location_id, locations) # Call draw_zone_map directly
+    elif command == "look": print("\nYou take a closer look around...")
+    elif command == "go":
+        if not args: print("Go where? (Specify a direction like 'go north')")
+        else:
+            direction = args[0]
+            if player.current_map_type == "zone":
+                if direction in location_data.get("exits", {}):
+                    destination_loc_id = location_data["exits"][direction]
+                    destination_loc_data = locations.get(destination_loc_id, {})
+
+                    # Check if moving to a city node that should trigger city map entry
+                    city_map_transition_info = destination_loc_data.get("city_map_transitions", {}).get("enter")
+                    city_id_from_transition = city_map_transition_info.get("city_id") if city_map_transition_info else None
+
+                    if city_map_transition_info and city_id_from_transition and city_id_from_transition in city_maps_data:
+                        city_map_details = city_maps_data.get(city_id_from_transition)
+                        entry_point_key = city_map_transition_info.get("entry_point_key")
+                        entry_coords = city_map_details.get("entry_points", {}).get(entry_point_key)
+
+                        if entry_coords:
+                            player.last_zone_location_id = destination_loc_id # Store the city node ID
+                            player.current_map_type = "city"
+                            player.current_city_id = city_id_from_transition
+                            player.current_city_x = entry_coords["x"]
+                            player.current_city_y = entry_coords["y"]
+                            player.current_location_id = destination_loc_id # Keep track of the zone map "parent" location
+                            print(f"You enter the bustling city of {city_map_details.get('name', city_id_from_transition.capitalize())}.")
+                        else:
+                            # City transition defined, but entry point key is invalid in city_map.json
+                            # or entry_coords are missing.
+                            print(f"You arrive at {destination_loc_data.get('name', 'the city entrance')}, but the way into the detailed map is unclear from here.")
+                            player.move_to(destination_loc_id)
+                            print(f"You walk {direction}.")
+                    else:
+                        # Not a city with a detailed map, or no transition info
+                        player.move_to(destination_loc_id)
+                        print(f"You walk {direction}.")
+                else: print(f"You can't go {direction} from here.")
+            elif player.current_map_type == "city":
+                current_city_map = city_maps_data.get(player.current_city_id)
+                if not current_city_map:
+                    print("[ERROR] Current city map data is missing. Cannot move.")
+                    return True # Or handle error more gracefully
+
+                grid_width = current_city_map["grid_size"]["width"]
+                grid_height = current_city_map["grid_size"]["height"]
+
+                new_x, new_y = player.current_city_x, player.current_city_y
+
+                if direction == "north": new_y -= 1
+                elif direction == "south": new_y += 1
+                elif direction == "east": new_x += 1
+                elif direction == "west": new_x -= 1
+                else:
+                    print(f"Unknown direction: {direction}")
+                    return True
+
+                # Boundary checks
+                if 0 <= new_x < grid_width and 0 <= new_y < grid_height:
+                    target_cell_data = current_city_map["cells"][new_y][new_x]
+                    if target_cell_data.get("impassable") or target_cell_data.get("type") in ["wall_city_edge", "water_river_edge"]: # Add more impassable types as needed
+                        print(f"You can't go {direction}. Something blocks your way ({target_cell_data.get('description', 'an obstacle')}).")
+                    else:
+                        player.current_city_x = new_x
+                        player.current_city_y = new_y
+                        print(f"You move {direction}.")
+                        # Handle automatic actions on entering a cell, like 'move_to_cell'
+                        cell_action = target_cell_data.get("action")
+                        if cell_action and cell_action.get("type") == "move_to_cell" and "target_cell" in cell_action:
+                            player.current_city_x = cell_action["target_cell"]["x"]
+                            player.current_city_y = cell_action["target_cell"]["y"]
+                            print(f"You are quickly ushered to another part of the area...") # Or a more specific message
+                else:
+                    print(f"You can't go {direction}. You've reached the edge of this area.")
+    elif command == "enter" and " ".join(args) == "city":
+        if player.current_map_type == "zone":
+            current_loc_id = player.current_location_id
+            current_location_data = locations.get(current_loc_id, {})
+
+            if "city_map_transitions" in current_location_data and \
+               "enter" in current_location_data["city_map_transitions"]:
+
+                transition_info = current_location_data["city_map_transitions"]["enter"]
+                city_id_to_enter = transition_info.get("city_id")
+                entry_point_key = transition_info.get("entry_point_key")
+                city_map_details = city_maps_data.get(city_id_to_enter)
+
+                if city_map_details and entry_point_key and entry_point_key in city_map_details.get("entry_points", {}):
+                    entry_coords = city_map_details["entry_points"][entry_point_key]
+                    player.last_zone_location_id = current_loc_id # Store where we entered from
+                    player.current_map_type = "city"
+                    player.current_city_id = city_id_to_enter
+                    player.current_city_x = entry_coords["x"]
+                    player.current_city_y = entry_coords["y"]
+                    print(f"You step through the gate and enter the detailed map of {city_map_details.get('name', city_id_to_enter.capitalize())}.")
+                else:
+                    print(f"You are at a city entrance, but the detailed map data for {city_id_to_enter.capitalize()} is missing or misconfigured.")
+            else: print("You are not at a recognized city entrance.")
+        else: print("You are already inside a city.")
+    elif command == "open" and " ".join(args) == "worn crate": # Specific for starter task
+        if player.current_location_id == "generic_start_room":
+            crate = locations["generic_start_room"]["features"]["worn_crate"]
+            if crate["closed"]:
+                # Use the environmental interaction handler for consistency
+                handle_environmental_interaction("worn_crate", "open")
+            else:
+                print("The crate is already open and empty.")
+        else:
+            print("There is no worn crate here to open.")
+    elif command == "take":
+        if not args: print("Take what?")
+        else:
+            # This 'take' command logic should now work for items revealed from the crate
+            item_name_input = " ".join(args)
+            item_to_take_id = None # This will store the item_id if found
+            room_items = location_data.get("items", []) # Get a mutable copy if modification is direct
+
+            # Iterate over a copy of room_items if removing while iterating
+            for r_item_id in list(room_items):
+                item_data = items_data.get(r_item_id, {})
+                current_item_name_lower = item_data.get("name", "").lower()
+                current_item_id_as_name = r_item_id.replace("_", " ")
+
+                if item_name_input == current_item_name_lower or item_name_input == current_item_id_as_name:
+                    item_to_take_id = r_item_id
+                    break
+
+            if item_to_take_id:
+                # Use the award_item_to_player function which handles adding to inventory and logging
+                game_logic.award_item_to_player(player, items_data, item_to_take_id, source=f"take_room_{loc_id}", log_event_func=log_game_event)
+                # Remove from the room's item list
+                if item_to_take_id in room_items: # Double check it's still there before removing
+                    room_items.remove(item_to_take_id)
+            else:
+                print(f"There is no {item_name_input} here to take.")
+
+    elif command == "inventory" or command == "i":
+        if player.inventory:
+            print("\nYou are carrying:")
+            for item_id in player.inventory: print(f"  - {items_data.get(item_id, {}).get('name', item_id.replace('_',' '))}")
+        else: print("Your inventory is empty.")
+    elif command == "use":
+        if len(args) == 1: # Handle "use <item>"
+            item_input = args[0]
+            # Find the item ID in the player's inventory by name or ID
+            item_in_inv_id = next((inv_id for inv_id in player.inventory if item_input == items_data.get(inv_id,{}).get("name","").lower() or item_input == inv_id.replace("_"," ")), None)
+
+            if not item_in_inv_id:
+                print(f"You don't have a {item_input}.")
+                return True
+
+            item_details = items_data.get(item_in_inv_id)
+            # Check if the item has a 'use' action defined
+            if not item_details or "actions" not in item_details or "use" not in item_details["actions"]:
+                 print(f"You can't 'use' the {item_details.get('name', item_input)} in that way.")
+                 return True
+
+            use_action_details = item_details["actions"]["use"]
+            outcome_pool = use_action_details.get("outcomes", [])
+
+            # Print the action message if defined
+            if use_action_details.get("message"):
+                 print(use_action_details["message"])
+
+            # Process outcomes (assuming simple sequential or first outcome for now)
+            if not outcome_pool:
+                 print(f"Using the {item_details.get('name', item_input)} seems to have no effect.")
+                 return True
+
+            # For simplicity, process all outcomes listed
+            for chosen_outcome in outcome_pool:
+                if chosen_outcome.get("message"):
+                    print(chosen_outcome["message"]) # Print outcome-specific message
+
+                if chosen_outcome.get("type") == "add_contained_currency":
+                    currency_value = chosen_outcome.get("value", 0)
+                    currency_type = chosen_outcome.get("currency_type", "coins") # Default to coins
+                    if currency_value > 0:
+                        # Assuming player only has 'coins' currency for now
+                        player.add_coins(currency_value, log_event_func=log_game_event, source=f"used_item_{item_in_inv_id}")
+                    else:
+                        print(f"The {item_details.get('name', item_input)} seems to be empty of currency.")
+
+                elif chosen_outcome.get("type") == "reveal_contained_items":
+                     items_to_reveal = chosen_outcome.get("items", [])
+                     if items_to_reveal:
+                         print(f"Inside, you find:")
+                         for revealed_item_id in items_to_reveal:
+                             game_logic.award_item_to_player(player, items_data, revealed_item_id, source=f"used_item_{item_in_inv_id}", log_event_func=log_game_event)
+                     else:
+                         print(f"The {item_details.get('name', item_input)} seems to be empty of items.")
+
+                # Add other item use outcome types here (e.g., heal, buff, etc.)
+                elif chosen_outcome.get("type") == "heal":
+                    heal_amount = chosen_outcome.get("amount", 0)
+                    if heal_amount > 0:
+                        player.heal(heal_amount)
+                        print(f"You feel restored. Your HP is now {player.hp}/{player.max_hp}.")
+                # Add other outcome types as needed
+
+            # After processing outcomes, remove the container item from inventory
+            # This assumes the container is consumed on use. Adjust if some containers are reusable.
+            player.remove_item_from_inventory(item_in_inv_id)
+            print(f"The {item_details.get('name', item_input)} is consumed.") # Or "is now empty and discarded."
+
+        elif len(args) >= 3 and args[1] == "on": # Existing "use <item> on <target>" logic
+            item_input = args[0]
+            target_input = args[2]
+            item_in_inv_id = next((inv_id for inv_id in player.inventory if item_input == items_data.get(inv_id,{}).get("name","").lower() or item_input == inv_id.replace("_"," ")), None)
+            target_feature_id = next((f_id for f_id in location_data.get("features",{}).keys() if target_input == f_id.replace("_"," ")), None)
+
+            if not item_in_inv_id: print(f"You don't have a {item_input}.")
+            elif not target_feature_id: print(f"There is no {target_input} here to use the {item_input} on.")
+            else:
+                feature = location_data["features"][target_feature_id]
+                if feature.get("locked") and feature.get("key_needed") == item_in_inv_id:
+                    print(feature["unlock_message"])
+                    feature["locked"] = False
+                    game_logic.remove_item_from_player_inventory(player, items_data, item_in_inv_id, source=f"used_on_{target_feature_id}", log_event_func=log_game_event)
+                    if "contains_item_on_unlock" in feature:
+                        new_item = feature.pop("contains_item_on_unlock")
+                        location_data.setdefault("items", []).append(new_item)
+                        # Log item revealed from a locked feature
+                        log_game_event("feature_item_revealed", {
+                            "feature_id": target_feature_id,
+                            "revealed_item_id": new_item,
+                            "location_id": player.current_location_id
+                        })
+                        print(f"The {target_feature_id.replace('_', ' ')} creaks open. You see a {items_data.get(new_item,{}).get('name',new_item)} inside!")
+                elif not feature.get("locked"): print(f"The {target_feature_id.replace('_', ' ')} is already unlocked/used.")
+                else: print(f"The {item_input} doesn't seem to work on the {target_feature_id.replace('_', ' ')}.")
+        else:
+            print("Invalid 'use' command format. Try 'use <item_name>' or 'use <item_name> on <target_name>'.")
+        return True
+    elif command == "talk":
+        if not args: print("Talk to whom?")
+        else:
+            npc_name_input = " ".join(args)
+            room_npc_objects = location_data.get("npcs", {}) # This now contains NPC objects
+            found_npc_object = None
+            target_npc_id = None
+            for npc_id_key, npc_obj_val in room_npc_objects.items():
+                if npc_name_input == npc_obj_val.name.lower() or npc_name_input == npc_id_key.lower():
+                    found_npc_object = npc_obj_val
+                    target_npc_id = npc_id_key
+                    break
+
+            if found_npc_object:
+                print(f"\nYou approach {found_npc_object.name}.")
+                if found_npc_object.pre_combat_dialogue and found_npc_object.dialogue_options:
+                    print(f"{found_npc_object.name} says: \"{found_npc_object.pre_combat_dialogue}\"")
+                    player.start_dialogue(target_npc_id, found_npc_object.dialogue_options)
+                elif found_npc_object.type == "quest_giver_simple":
+                    if found_npc_object.quest_item_needed in player.inventory:
+                        print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue_after_quest_complete or 'Thank you!'}\"")
+                        game_logic.remove_item_from_player_inventory(player, items_data, found_npc_object.quest_item_needed, source=f"quest_turn_in_{target_npc_id}", log_event_func=log_game_event)
+                        if found_npc_object.quest_reward_item:
+                            game_logic.award_item_to_player(player, items_data, found_npc_object.quest_reward_item, source=f"quest_reward_{target_npc_id}", log_event_func=log_game_event)
+
+                        # If there's a currency reward for the quest
+                        if found_npc_object.quest_reward_currency:
+                            player.add_coins(found_npc_object.quest_reward_currency, log_event_func=log_game_event, source=f"quest_reward_{target_npc_id}")
+                            print(f"You are also rewarded with {found_npc_object.quest_reward_currency} coins.")
+                    else:
+                        print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue_after_quest_incomplete or found_npc_object.dialogue}\"")
+                elif found_npc_object.hostile:
+                    print(found_npc_object.dialogue)
+                    player.enter_combat(target_npc_id)
+                elif found_npc_object.type == "vendor":
+                    print(VENDOR_STALL_VISUAL)
+                    print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue}\"")
+                else:
+                    print(f"{found_npc_object.name} says: \"{found_npc_object.dialogue}\"")
+            else:
+                print(f"There is no one named '{npc_name_input}' here to talk to.")
+    else:
+        potential_verb = command
+
         # Check for 'exit city' command specifically
         if command == "exit" and " ".join(args) == "city":
              if player.current_map_type == "city":

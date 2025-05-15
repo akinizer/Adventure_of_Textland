@@ -1,0 +1,18 @@
+{
+  "small_pouch_of_coins": {
+    "name": "Small Pouch of Coins",
+    "description": "A small leather pouch jingling with coins.",
+    "type": "currency_container",
+    "actions": {
+      "use": {
+        "message": "You carefully untie the drawstring.",
+        "outcomes": [
+          {
+            "type": "add_contained_currency",
+            "value": 15
+          }
+        ]
+      }
+    }
+  }
+}
