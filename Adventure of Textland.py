@@ -387,6 +387,13 @@ def save_player_data(player_to_save, reason_for_save="Game state saved"):
     save_file_path = os.path.join(player_specific_dir, "character_creation.json")
     try:
         data_to_save = player_to_save.__dict__.copy()
+        # Set respawn location if saving in a city
+        # This should happen before serializing data_to_save if respawn_location_id is part of Player object
+        if player_to_save.current_location_id in locations and \
+        locations[player_to_save.current_location_id].get("zone") in CITY_ZONES:
+            player_to_save.respawn_location_id = player_to_save.current_location_id
+            data_to_save["respawn_location_id"] = player_to_save.respawn_location_id # Ensure it's in the dict to be saved
+
         # Convert set to list for JSON serialization
         if isinstance(data_to_save.get("visited_locations"), set):
             data_to_save["visited_locations"] = list(data_to_save["visited_locations"])
