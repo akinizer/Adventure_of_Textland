@@ -83,19 +83,26 @@
             </div>
             <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
         
-            <!-- Bottom Action Bar (ElvUI-style 8 slots) - MOVED HERE -->
-            <div id="bottom-action-bar-container">
-                <!-- Slots will be added/managed by JavaScript -->
-                <div class="action-slot" id="action-slot-1"></div>
-                <div class="action-slot" id="action-slot-2"></div>
-                <div class="action-slot" id="action-slot-3"></div>
-                <div class="action-slot" id="action-slot-4"></div>
-                <div class="action-slot" id="action-slot-5"></div>
-                <div class="action-slot" id="action-slot-6"></div>
-                <div class="action-slot" id="action-slot-7"><button id="action-slot-worldmap-button">🗺️</button></div> <!-- World Map slot -->
-                <div class="action-slot" id="action-slot-8"><button id="action-slot-backpack-button">🎒</button></div> <!-- Backpack slot -->
-            </div>
+            <!-- Container for bottom bars -->
+            <div id="bottom-ui-elements-container" style="display: flex; justify-content: center; align-items: flex-end; position: fixed; bottom: 10px; left: 0; right: 0; z-index: 100;">
+                <!-- Command Nexus (ElvUI-style 8 slots) -->
+                <div id="command-nexus-container"> <!-- Renamed from bottom-action-bar-container for clarity -->
+                    <!-- Slots will be added/managed by JavaScript -->
+                    <div class="action-slot" id="action-slot-1"></div>
+                    <div class="action-slot" id="action-slot-2"></div>
+                    <div class="action-slot" id="action-slot-3"></div>
+                    <div class="action-slot" id="action-slot-4"></div>
+                    <div class="action-slot" id="action-slot-5"></div>
+                    <div class="action-slot" id="action-slot-6"></div> <!-- This slot is now empty -->
+                    <div class="action-slot" id="action-slot-7"><button id="action-slot-worldmap-button">🗺️</button></div> <!-- World Map slot -->
+                    <div class="action-slot" id="action-slot-8"><button id="action-slot-backpack-button">🎒</button></div> <!-- Backpack slot -->
+                </div>
 
+                <!-- Dedicated Save Button Bar (1 slot) -->
+                <div id="save-button-bar-container" style="margin-left: 15px;"> <!-- Add some spacing -->
+                    <div class="action-slot" id="action-slot-save"><button id="dedicated-save-button" style="display: none;">💾</button></div>
+                </div>
+            </div>
         </div>
         <!-- Dynamic Action Panels - These will be MOVED into #action-panels-container by JavaScript -->
         <div id="exit-buttons-panel" class="actions-panel" style="display: none;">

@@ -860,26 +860,6 @@ function updateCharacterPanelComponent(playerData) {
     }
 }
 
-function updateGameActionsComponent(data) {
-    const gameActionsPanel = document.getElementById('game-actions-panel');
-    const buttonsContainer = setupPanel('game-actions-panel', 'action-panels-container', 'Game Actions');
-    if (!buttonsContainer || !gameActionsPanel) return;
-
-    if (data.can_save_in_city) {
-        const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save Game';
-        saveButton.onclick = async () => { 
-            const response = await fetch('/api/save_game_state', { method: 'POST' });
-            const result = await response.json();
-            appendMessageToOutput(result.message); 
-        };
-        buttonsContainer.appendChild(saveButton);
-        gameActionsPanel.style.display = 'block';
-    } else {
-        gameActionsPanel.style.display = 'none';
-    }
-}
-
 function renderOrUpdateModalBackpackGrid(itemsToDisplay) {
     const modalGridContainer = document.getElementById('modal-backpack-grid');
     if (!modalGridContainer) return; 
@@ -1130,23 +1110,32 @@ function setupCommandNexus() {
         return;
     }
     
-    // If you rename the HTML ID from 'bottom-action-bar-container' to 'command-nexus-container' in index.jinja,
-    // you would also update the getElementById here. For now, assuming HTML ID remains.
     const backpackButton = document.getElementById('action-slot-backpack-button'); 
     if (backpackButton) {
-        backpackButton.onclick = function() { // Changed to onclick for simplicity, can revert to addEventListener if preferred
+        backpackButton.onclick = function() { 
             performAction('inventory'); // Action to open the inventory modal
         }
     }
     const worldMapButton = document.getElementById('action-slot-worldmap-button');
     if (worldMapButton) {
-        worldMapButton.onclick = function() { // Changed to onclick for simplicity
+        worldMapButton.onclick = function() { 
             toggleWorldMapModal();
         };
     }
 
     // Mark as setup if at least one button was found and configured
-    if (backpackButton || worldMapButton) commandNexusSetup = true;
+    // const saveButton = document.getElementById('action-slot-save-button'); // OLD ID
+    const saveButton = document.getElementById('dedicated-save-button'); // NEW ID
+    if (saveButton) {
+        saveButton.onclick = function() {
+            performAction('!save'); // Action to save the game
+        };
+    }
+
+    // Mark as setup if at least one of the core buttons was found and configured
+    // (Adjust if more buttons become essential for setup)
+    if (backpackButton || worldMapButton || saveButton) commandNexusSetup = true;
+
 
 }
 
@@ -1185,13 +1174,38 @@ function displaySceneData(data, actionStringEcho = null) {
     updateRoomItemsComponent(data.room_items);
 
     // Call the component function to update the Game Actions Panel
-    updateGameActionsComponent(data);
     updateActionButtonsComponent(data.available_actions); // Add this line
     updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
     updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
 
     // Update the Inventory Modal Component (handles opening if action was 'inventory')
     updateInventoryModalComponent(data, actionStringEcho);
+
+    // Control visibility of the Save Game button in Command Nexus
+    console.log("[SaveButtonDebug] Checking save button visibility. data.can_save_in_city:", data.can_save_in_city);
+    const commandNexusSaveButton = document.getElementById('action-slot-save-button');
+    console.log("[SaveButtonDebug] commandNexusSaveButton element:", commandNexusSaveButton);
+
+    if (commandNexusSaveButton) {
+        if (data.can_save_in_city) {
+            console.log("[SaveButtonDebug] Setting save button to visible.");
+            commandNexusSaveButton.style.display = 'inline-block'; // Or 'block', 'flex' etc.
+        } else {
+            console.log("[SaveButtonDebug] Setting save button to hidden.");
+            commandNexusSaveButton.style.display = 'none';
+        }
+    }
+
+    const dedicatedSaveButton = document.getElementById('dedicated-save-button'); // NEW ID
+    
+    if (dedicatedSaveButton) {
+        if (data.can_save_in_city) {
+            dedicatedSaveButton.style.display = 'inline-block'; // Or 'block', 'flex' etc.
+        } else {
+            dedicatedSaveButton.style.display = 'none';
+        }
+    }
+
 
     // --- Conditional Map Display ---
     const primaryMapDisplayElement = document.getElementById('zone-map-side-panel'); // This is now the single map display area

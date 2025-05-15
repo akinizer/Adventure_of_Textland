@@ -65,21 +65,36 @@ button:hover { background-color: #0056b3; }
     /* Add any other styling like borders, etc. if you want */
 }
 
-/* BOTTOM BAR */
-#bottom-action-bar-container {
+/* Container for all bottom UI elements (Command Nexus + Save Bar) */
+#bottom-ui-elements-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end; /* Aligns items to the bottom of this container if they have different heights */
+    position: fixed;
+    bottom: 10px;
+    left: 0; /* Occupy full width for centering */
+    right: 0; /* Occupy full width for centering */
+    z-index: 100;
+}
+
+/* COMMAND NEXUS STYLING (formerly #bottom-action-bar-container) */
+#command-nexus-container {
     display: flex; /* Arrange slots horizontally */
-    justify-content: center; /* Center the slots if they don't fill the width */
-    align-items: center;
-    position: fixed; /* Or absolute, depending on parent positioning */
-    bottom: 10px; /* Adjust as needed */
-    left: 50%;
-    transform: translateX(-50%); /* Center the bar horizontally */
     padding: 8px;
     background-color: #222; /* Dark background like ElvUI */
     border: 1px solid #444;
     border-radius: 12px 12px 0 0; /* Curved top corners */
     box-shadow: 0 -2px 5px rgba(0,0,0,0.3);
-    z-index: 100; /* Ensure it's above other content */
+}
+
+/* DEDICATED SAVE BUTTON BAR CONTAINER STYLING */
+#save-button-bar-container {
+    display: flex; /* To align its single slot, though not strictly necessary for one item */
+    background-color: #222; /* Same bg as command nexus */
+    border: 1px solid #444; /* Same border */
+    border-radius: 12px 12px 0 0; /* Same curved top corners */
+    padding: 8px; /* Same padding as command nexus to contain the slot */
+    margin-left: 15px; /* Spacing from Command Nexus */
 }
 
 .action-slot {
