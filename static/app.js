@@ -1394,11 +1394,24 @@ function updateVPadComponent(data) {
     const availableExits = data.available_exits || [];
     const availableActions = data.available_actions || [];
 
-    if (vpadNorth) vpadNorth.style.display = availableExits.includes('north') ? 'flex' : 'none';
-    if (vpadSouth) vpadSouth.style.display = availableExits.includes('south') ? 'flex' : 'none';
-    if (vpadEast) vpadEast.style.display = availableExits.includes('east') ? 'flex' : 'none';
-    if (vpadWest) vpadWest.style.display = availableExits.includes('west') ? 'flex' : 'none';
+    const updateButtonState = (buttonElement, isAvailable) => {
+        if (buttonElement) {
+            buttonElement.style.display = 'flex'; // Always visible
+            if (isAvailable) {
+                buttonElement.classList.remove('vpad-button-unavailable');
+                buttonElement.disabled = false; // Ensure it's clickable
+            } else {
+                buttonElement.classList.add('vpad-button-unavailable');
+                buttonElement.disabled = true; // Make it unclickable
+            }
+        }
+    };
+
+    updateButtonState(vpadNorth, availableExits.includes('north'));
+    updateButtonState(vpadSouth, availableExits.includes('south'));
+    updateButtonState(vpadEast, availableExits.includes('east'));
+    updateButtonState(vpadWest, availableExits.includes('west'));
     
     // Assuming "enter city" is the action for the center button
-    if (vpadCenter) vpadCenter.style.display = availableActions.includes('enter city') ? 'flex' : 'none';
+    updateButtonState(vpadCenter, availableActions.includes('enter city'));
 }

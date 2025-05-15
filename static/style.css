@@ -152,8 +152,11 @@ button:hover { background-color: #0056b3; }
 .vpad-button {
     width: 100%; /* Fill grid cell */
     height: 100%; /* Fill grid cell */
-    border: 1px solid #777;
-    background-color: #444;
+    border: 1px solid rgba(255, 255, 255, 0.3); /* Lighter border for glassy effect */
+    /* Glassy background gradient */
+    background: linear-gradient(to bottom, rgba(80,80,80,0.9) 0%, rgba(50,50,50,0.9) 100%);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2), /* Outer shadow for depth */
+                inset 0 1px 0 rgba(255,255,255,0.2); /* Inner highlight */
     color: #eee;
     font-size: 1.5em; /* Adjust for arrow/icon size */
     cursor: pointer;
@@ -165,11 +168,14 @@ button:hover { background-color: #0056b3; }
 }
 
 .vpad-button:hover {
-    background-color: #555;
+    /* Slightly lighten on hover */
+    background: linear-gradient(to bottom, rgba(90,90,90,0.9) 0%, rgba(60,60,60,0.9) 100%);
 }
 
 .vpad-button:active {
-    background-color: #666;
+    /* Darken slightly and push down on active */
+    background: linear-gradient(to top, rgba(80,80,80,0.9) 0%, rgba(50,50,50,0.9) 100%);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .vpad-center {
@@ -181,3 +187,12 @@ button:hover { background-color: #0056b3; }
     border-radius: 5px; /* Slightly rounded corners for arrows */
 }
 
+.vpad-button-unavailable {
+    /* Glassy red for unavailable state */
+    background: #404040 !important; /* Dark, flat gray */
+    border-color: #303030 !important; /* Darker border */
+    color: #777 !important; /* Dimmer icon/text */
+    cursor: not-allowed !important;
+    box-shadow: none !important; /* Remove shadows for a flatter look */
+    opacity: 0.65; /* Make the button semi-transparent */
+}
