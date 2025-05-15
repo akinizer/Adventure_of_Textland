@@ -1173,10 +1173,11 @@ function displaySceneData(data, actionStringEcho = null) {
     updateFeatureInteractionsComponent(data.interactable_features);
     updateRoomItemsComponent(data.room_items);
 
-    // Call the component function to update the Game Actions Panel
-    updateActionButtonsComponent(data.available_actions); // Add this line
-    updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
+    // Call component functions for action panels in desired visual order (top to bottom)
     updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
+    updateActionButtonsComponent(data.available_actions); // For general actions like "Enter City", called AFTER exit buttons
+
+    updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
 
     // Update the Inventory Modal Component (handles opening if action was 'inventory')
     updateInventoryModalComponent(data, actionStringEcho);

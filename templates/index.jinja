@@ -60,10 +60,7 @@
                     </div>
                     <div id="action-panels-container" style="display: flex; flex-direction: column; gap: 10px; margin-top:10px;">
                         <!-- Dynamic action panels (features, items, NPCs, exits) will be appended here by JS -->
-                        <!-- Add this placeholder for the general actions panel -->
-                        <div id="general-actions-panel" class="game-panel" style="display: none;">
-                            <!-- Content will be managed by setupPanel and updateActionButtonsComponent -->
-                        </div>
+                        <!-- All panels like general-actions-panel, exit-buttons-panel, etc., should be initially defined outside and moved here by JS -->
                     </div>
                 </div>
                 <div id="zone-map-side-panel" style="flex: 1; border: 1px solid #ccc; padding: 10px; min-width: 250px; max-height: 60vh; overflow-y: auto; background-color: #f9f9f9;">
@@ -104,12 +101,16 @@
                 </div>
             </div>
         </div>
-        <!-- Dynamic Action Panels - These will be MOVED into #action-panels-container by JavaScript -->
+        <!-- Dynamic Action Panels - These will be MOVED into #action-panels-container by JavaScript. Their order here is for logical grouping; JS append order dictates final visual order. -->
         <div id="exit-buttons-panel" class="actions-panel" style="display: none;">
             <p><strong>Go:</strong></p>
             <!-- Dynamic exit buttons will go here, managed by app.js -->
         </div>
-        <div id="feature-interactions-panel" class="actions-panel" style="display: none;"> 
+        <div id="general-actions-panel" class="game-panel actions-panel" style="display: none;"> <!-- Placeholder for general actions like "Enter City" -->
+            <p><strong>Actions:</strong></p>
+            <!-- Content will be managed by setupPanel and updateActionButtonsComponent -->
+        </div>
+        <div id="feature-interactions-panel" class="actions-panel" style="display: none;">
             <p><strong>Room Features:</strong></p>
             <!-- Dynamic feature buttons will go here -->
         </div>
