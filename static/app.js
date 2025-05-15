@@ -2,7 +2,8 @@ let creationStep = 'species'; // 'species', 'class', 'name_gender', 'done'
 let chosenSpecies = null;
 let chosenClass = null;
 let discoveredDeadEnds = {}; // Object to store: e.g., { "locationId_direction": true }
-let gameIsPaused = false;
+let gameIsPaused = false; 
+let commandNexusSetup = false; // Flag to ensure Command Nexus setup runs only once
 let gameIsActiveForInput = false; // True when game interface is shown
 const SESSION_STORAGE_GAME_ACTIVE_KEY = 'textRpgGameSessionActive';
 const SESSION_STORAGE_CHAR_NAME_KEY = 'textRpgCharacterName';
@@ -190,7 +191,9 @@ async function showInitialCharacterScreen() {
     document.getElementById('room-items-panel').style.display = 'none'; // Explicitly hide
     sessionStorage.removeItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
     sessionStorage.removeItem(SESSION_STORAGE_CHAR_NAME_KEY);
-    gameIsActiveForInput = false;
+    gameIsActiveForInput = false; 
+    setupCommandNexus(); // Setup Command Nexus
+
 }
 
 async function loadSpecies() {
@@ -338,7 +341,7 @@ async function submitCharacterCreation(predefinedName = null, predefinedGender =
         sessionStorage.setItem(SESSION_STORAGE_GAME_ACTIVE_KEY, 'true');
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, charName);
         gameIsActiveForInput = true;
-
+        setupCommandNexus(); // Setup Command Nexus when game starts
     } catch (error) {
         const errorMessage = `Error creating character: ${error.message || error}`;
         console.error(errorMessage, error);
@@ -403,6 +406,7 @@ async function handleLoadCharacter(characterName) {
         sessionStorage.setItem(SESSION_STORAGE_GAME_ACTIVE_KEY, 'true');
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName);
         gameIsActiveForInput = true;
+        setupCommandNexus(); // Setup Command Nexus when game loads
     } catch (error) {
         const errorMessage = `Error loading character '${characterName}': ${error.message || error}`;
         console.error(errorMessage, error);
@@ -448,6 +452,8 @@ async function attemptResumeSession(characterName) {
         sessionStorage.setItem(SESSION_STORAGE_GAME_ACTIVE_KEY, 'true'); // Re-affirm session
         sessionStorage.setItem(SESSION_STORAGE_CHAR_NAME_KEY, characterName); // Re-affirm character
         gameIsActiveForInput = true;
+        setupCommandNexus(); // Setup Command Nexus when session resumes
+
     } catch (error) {
         console.error("Error resuming session directly, trying full load:", error);
         // Fallback to full load if direct resume fails
@@ -1117,6 +1123,32 @@ function updateZoneMapSidePanel(zoneMapData) {
     mapHTML += `</table>`;
     panel.innerHTML = mapHTML;
 }
+// --- Command Nexus Setup ---
+function setupCommandNexus() {
+    // Ensure this runs only once
+    if (commandNexusSetup) {
+        return;
+    }
+    
+    // If you rename the HTML ID from 'bottom-action-bar-container' to 'command-nexus-container' in index.jinja,
+    // you would also update the getElementById here. For now, assuming HTML ID remains.
+    const backpackButton = document.getElementById('action-slot-backpack-button'); 
+    if (backpackButton) {
+        backpackButton.onclick = function() { // Changed to onclick for simplicity, can revert to addEventListener if preferred
+            performAction('inventory'); // Action to open the inventory modal
+        }
+    }
+    const worldMapButton = document.getElementById('action-slot-worldmap-button');
+    if (worldMapButton) {
+        worldMapButton.onclick = function() { // Changed to onclick for simplicity
+            toggleWorldMapModal();
+        };
+    }
+
+    // Mark as setup if at least one button was found and configured
+    if (backpackButton || worldMapButton) commandNexusSetup = true;
+
+}
 
 
 // --- End of Top-Level Component Update Functions ---
@@ -1127,55 +1159,59 @@ function displaySceneData(data, actionStringEcho = null) {
     console.log("Data received by displaySceneData:", JSON.parse(JSON.stringify(data))); 
     const outputElement = document.getElementById('game-output');
 
-    // Call the top-level component update functions
-        updateInventoryModalComponent(data, actionStringEcho);
-        updateGameOutputComponent(data, actionStringEcho);
+    // Call the core component update functions
+    updateGameOutputComponent(data, actionStringEcho);
 
-        // If the inventory modal ("Backpack") is already open, refresh its grid content
-        const inventoryModal = document.getElementById('custom-modal-overlay');
-        if (inventoryModal) {
-            const modalTitleElement = inventoryModal.querySelector('#custom-modal-content h3');
-            if (modalTitleElement && modalTitleElement.textContent === "Backpack" && data.inventory_list) {
-                console.log("Inventory modal is open. Refreshing grid.");
-                renderOrUpdateModalBackpackGrid(data.inventory_list);
-            }
+    // If the inventory modal ("Backpack") is already open, refresh its grid content
+    // This logic is already present, ensuring it uses the latest data.
+    const inventoryModal = document.getElementById('custom-modal-overlay');
+    if (inventoryModal) {
+        const modalTitleElement = inventoryModal.querySelector('#custom-modal-content h3');
+        // Check if the modal is the Backpack modal AND if inventory_list data is available
+        if (modalTitleElement && modalTitleElement.textContent === "Backpack" && data.inventory_list) {
+            console.log("Inventory modal is open. Refreshing grid.");
+            renderOrUpdateModalBackpackGrid(data.inventory_list);
         }
+    }
 
-        // Call the component function to update the Dynamic Header
-        updateDynamicHeaderComponent(data); // Pass the whole data object, component will pick what it needs
+    // Call the component function to update the Dynamic Header
+    updateDynamicHeaderComponent(data); // Pass the whole data object, component will pick what it needs
 
-        // Call the component function to update the Character Panel
-        updateCharacterPanelComponent(data); 
+    // Call the component function to update the Character Panel
+    updateCharacterPanelComponent(data); 
 
-        // Call the component functions to update Feature and Item panels
-        updateFeatureInteractionsComponent(data.interactable_features);
-        updateRoomItemsComponent(data.room_items);
+    // Call the component functions to update Feature and Item panels
+    updateFeatureInteractionsComponent(data.interactable_features);
+    updateRoomItemsComponent(data.room_items);
 
-        // Call the component function to update the Game Actions Panel
-        updateGameActionsComponent(data);
-        updateActionButtonsComponent(data.available_actions); // Add this line
-        updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
-        updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
+    // Call the component function to update the Game Actions Panel
+    updateGameActionsComponent(data);
+    updateActionButtonsComponent(data.available_actions); // Add this line
+    updateNPCInteractionPanelComponent(data.npcs_in_room); // Handles people to talk to
+    updateExitButtonsComponent(data.available_exits); // Handles dynamic "Go" buttons
 
-        // --- Conditional Map Display ---
-        const primaryMapDisplayElement = document.getElementById('zone-map-side-panel'); // This is now the single map display area
+    // Update the Inventory Modal Component (handles opening if action was 'inventory')
+    updateInventoryModalComponent(data, actionStringEcho);
 
-        if (data.map_type === "city" && data.city_map_data) {
-            if (primaryMapDisplayElement) {
-                renderCityMap(data.city_map_data, data.player_city_x, data.player_city_y); // renderCityMap will now target zone-map-side-panel
-                primaryMapDisplayElement.style.display = 'block';
-            } else {
-                console.error("Primary map display element ('zone-map-side-panel') not found!");
-            }
-        } else { // Default to zone map view or if map_type is "zone"
-            if (primaryMapDisplayElement && data.current_zone_map_data) {
-                updateZoneMapSidePanel(data.current_zone_map_data);
-                primaryMapDisplayElement.style.display = 'block';
-            } else if (primaryMapDisplayElement) {
-                primaryMapDisplayElement.innerHTML = '<p style="text-align:center;">Map data unavailable.</p>'; // Clear or show placeholder
-                primaryMapDisplayElement.style.display = 'block';
-            }
+    // --- Conditional Map Display ---
+    const primaryMapDisplayElement = document.getElementById('zone-map-side-panel'); // This is now the single map display area
+
+    if (data.map_type === "city" && data.city_map_data) {
+        if (primaryMapDisplayElement) {
+            renderCityMap(data.city_map_data, data.player_city_x, data.player_city_y); // renderCityMap will now target zone-map-side-panel
+            primaryMapDisplayElement.style.display = 'block';
+        } else {
+            console.error("Primary map display element ('zone-map-side-panel') not found!");
         }
+    } else { // Default to zone map view or if map_type is "zone"
+        if (primaryMapDisplayElement && data.current_zone_map_data) {
+            updateZoneMapSidePanel(data.current_zone_map_data);
+            primaryMapDisplayElement.style.display = 'block';
+        } else if (primaryMapDisplayElement) {
+            primaryMapDisplayElement.innerHTML = '<p style="text-align:center;">Map data unavailable.</p>'; // Clear or show placeholder
+            primaryMapDisplayElement.style.display = 'block';
+        }
+    }
 }
 
 function renderCityMap(cityMapData, playerCityX, playerCityY) {
@@ -1262,7 +1298,8 @@ window.onload = () => {
             console.error("Error resuming session by reloading character:", error);
             sessionStorage.removeItem(SESSION_STORAGE_GAME_ACTIVE_KEY);
             sessionStorage.removeItem(SESSION_STORAGE_CHAR_NAME_KEY);
-            showInitialCharacterScreen(); // Fallback to main screen
+            showInitialCharacterScreen(); // Fallback to main screen 
+            commandNexusSetup = false; // Reset flag if returning to character screen
         });
     } else {
         showInitialCharacterScreen(); // Start with character selection/load screen

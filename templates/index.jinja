@@ -76,14 +76,26 @@
             </div>
             <div class="actions-panel">
                 <p><strong>Common Actions:</strong></p>
-                <button onclick="performAction('inventory')">Check Inventory</button>
-                <button onclick="toggleWorldMapModal()">View World Map (Modal)</button>
             </div>
              <div id="game-actions-panel" class="actions-panel" style="display: none;"> <!-- This panel is for dynamic buttons like 'Save Game' -->
                 <p><strong>Game Actions:</strong></p>
                 <!-- Save button will go here -->
             </div>
             <p><small>Click actions to interact with the game. Some actions are more fully implemented than others in this browser view.</small></p>
+        
+            <!-- Bottom Action Bar (ElvUI-style 8 slots) - MOVED HERE -->
+            <div id="bottom-action-bar-container">
+                <!-- Slots will be added/managed by JavaScript -->
+                <div class="action-slot" id="action-slot-1"></div>
+                <div class="action-slot" id="action-slot-2"></div>
+                <div class="action-slot" id="action-slot-3"></div>
+                <div class="action-slot" id="action-slot-4"></div>
+                <div class="action-slot" id="action-slot-5"></div>
+                <div class="action-slot" id="action-slot-6"></div>
+                <div class="action-slot" id="action-slot-7"><button id="action-slot-worldmap-button">🗺️</button></div> <!-- World Map slot -->
+                <div class="action-slot" id="action-slot-8"><button id="action-slot-backpack-button">🎒</button></div> <!-- Backpack slot -->
+            </div>
+
         </div>
         <!-- Dynamic Action Panels - These will be MOVED into #action-panels-container by JavaScript -->
         <div id="exit-buttons-panel" class="actions-panel" style="display: none;">
