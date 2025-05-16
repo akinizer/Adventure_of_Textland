@@ -195,20 +195,5 @@
             }
         },
         "npcs": {}
-    },
-    "generic_start_room": {
-        "name": "Dimly Lit Chamber",
-        "zone": "Starter Dungeons",
-        "map_x": 0,
-        "map_y": 0,
-        "description": "This small, stone chamber is cold and damp. A faint light filters in from a crack in the ceiling. There's a worn wooden crate in one corner.",
-        "exits": {"out": "eldoria_city_node"},
-        "items": [],
-        "features": {
-            "worn_crate": { 
-                "model_id": "starter_worn_crate_model"
-            }
-        },
-        "npcs": {}
     }
 }

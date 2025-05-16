@@ -156,6 +156,11 @@ def load_all_game_data():
     """Loads all game data from their base structures or JSON files."""
     global locations, zone_layouts, items_data, species_data, classes_data, city_maps_data, environmental_feature_models
     locations = _load_json_data_from_file("locations.json", "Locations")
+    # Load the specific generic_start_room definition and merge it
+    starter_room_definition = _load_json_data_from_file("generic_start_room.json", "Generic Starter Room Definition")
+    if starter_room_definition:
+        locations.update(starter_room_definition) # Merges the starter room into the main locations dict
+
     zone_layouts = _load_json_data_from_file("zone_layouts.json", "Zone Layouts")
     items_data = _load_json_data_from_file("items.json", "Items")
     species_data = _load_json_data_from_file("species.json", "Species")
