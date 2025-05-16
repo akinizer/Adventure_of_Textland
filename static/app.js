@@ -329,7 +329,19 @@ async function submitCharacterCreation(predefinedName = null, predefinedGender =
                 player_gender: chosenGender
             })
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        if (!response.ok) {
+            if (response.status === 403) { // Specifically handle 403 Forbidden
+                const errorData = await response.json();
+                // When character limit is reached, the OK button should take the user back to the character selection screen.
+                showMenuModal(
+                    "Character Creation Failed", 
+                    `Could not create character: ${errorData.error || 'Character limit reached.'}.`, 
+                    [{ text: "OK", action: showInitialCharacterScreen }]);
+                return; // Stop further processing
+            }
+            const errorText = await response.text();
+            throw new Error(`Server responded with ${response.status}: ${errorText || 'Failed to create character'}`);
+        }
         const initialSceneData = await response.json();
 
         creationArea.style.display = 'none';

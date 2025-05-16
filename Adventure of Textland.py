@@ -60,6 +60,8 @@ environmental_feature_models = {} # New: To store loaded environmental feature m
 player = Player()
 
 MAX_NAME_LENGTH = 20
+MAX_PLAYABLE_CHARACTERS = 12 # Define the maximum number of characters a player can have
+
 CITY_ZONES = ["Eldoria", "Riverford"] # Zones considered as cities for saving
 # Stricter pattern for humanoid names: only letters, spaces, hyphens, apostrophes.
 ALLOWED_HUMANOID_NAME_PATTERN = re.compile(r"^[a-zA-Z '-]+$") 
@@ -1547,6 +1549,12 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
         player_name = data.get('player_name')
         player_gender = data.get('player_gender')
 
+        # Check character limit
+        existing_characters_count = len(list_existing_characters())
+        if existing_characters_count >= MAX_PLAYABLE_CHARACTERS:
+            return jsonify({"error": f"Maximum number of characters ({MAX_PLAYABLE_CHARACTERS}) reached."}), 403 # 403 Forbidden
+
+
         if not all([species_id, class_id, player_name, player_gender]):
             # print(f"DEBUG: Missing data in /api/create_character: {data}") # Keep for debugging if needed
             return jsonify({"error": "Missing character creation data."}), 400
@@ -2630,9 +2638,13 @@ if __name__ == "__main__":
                 options[str(current_option)] = ("load", char_data['display_name'])
                 current_option += 1
             
-            print(f"  {current_option}. Create New Character")
-            options[str(current_option)] = ("new", None)
-            current_option_after_new = current_option + 1
+            if len(existing_chars) < MAX_PLAYABLE_CHARACTERS:
+                print(f"  {current_option}. Create New Character ({MAX_PLAYABLE_CHARACTERS - len(existing_chars)} slots remaining)")
+                options[str(current_option)] = ("new", None)
+                current_option_after_new = current_option + 1
+            else:
+                print(f"  (Maximum number of characters ({MAX_PLAYABLE_CHARACTERS}) reached)")
+                current_option_after_new = current_option # No "new" option was added
 
             delete_options_start_index = current_option_after_new
             if existing_chars: 
@@ -2667,8 +2679,12 @@ if __name__ == "__main__":
         elif auto_start_game and existing_chars:
              print(f"Autostarting with first available character: {existing_chars[0]['display_name']}")
              load_character_data(existing_chars[0]['display_name'])
-        elif run_character_creation_on_start or auto_start_game: # No existing chars, or autostart with no chars
+        elif (run_character_creation_on_start or auto_start_game) and \
+            (not existing_chars or len(existing_chars) < MAX_PLAYABLE_CHARACTERS): # No existing chars, or autostart with no chars and limit not reached
             initialize_game_state()
+        elif len(existing_chars) >= MAX_PLAYABLE_CHARACTERS:
+            print(f"Maximum number of characters ({MAX_PLAYABLE_CHARACTERS}) reached. Cannot create a new character via terminal autostart.")
+
     
     # --- Browser Launch Logic ---
     if start_browser_on_launch:
