@@ -2057,26 +2057,44 @@ if flask_app_instance:
 
 def get_world_map_data_for_api(player_visited_locations, all_locations_data):
     """
-    Prepares world map data structured for API response.
-    Returns a list of zones, each containing a list of location info.
+    Prepares world map data structured for API response with enhanced tooltips.
     """
-    # Send a flat list of ALL locations with coordinates, visited status, and current location
-    # Determine player's current zone
     current_zone_name = "Unknown Zone"
     if player and player.game_active and player.current_location_id in all_locations_data:
         current_zone_name = all_locations_data[player.current_location_id].get("zone", "Uncharted Territories")
 
     map_locations = []
     for loc_id, loc_data in all_locations_data.items():
-        if "map_x" in loc_data and "map_y" in loc_data: # Include ALL locations with map coordinates
-            map_locations.append({
+        if "map_x" in loc_data and "map_y" in loc_data:
+            location_info = {
+                # Basic location info
                 "id": loc_id,
                 "name": loc_data.get("name", loc_id),
                 "x": loc_data["map_x"],
                 "y": loc_data["map_y"],
                 "visited": loc_id in player_visited_locations,
-                "exits": loc_data.get("exits", {})
-            })
+                "exits": loc_data.get("exits", {}),
+                # NEW: Enhanced tooltip with additional information
+                "tooltip": {
+                    # Basic tooltip info
+                    "name": loc_data.get("name", loc_id),
+                    "description": loc_data.get("description", "An unknown area.") if loc_id in player_visited_locations else "You haven't visited this location yet.",
+                    "zone": loc_data.get("zone", "Unknown Zone"),
+                    "exits": list(loc_data.get("exits", {}).keys()) if loc_id in player_visited_locations else [],
+                    "discovered": loc_id in player_visited_locations,
+                    # Addiional info for location details
+                    "features": [f.replace("_", " ").title() for f in loc_data.get("features", {})] if loc_id in player_visited_locations else [],
+                    "npcs": [npc.name for npc in loc_data.get("npcs", {}).values()] if loc_id in player_visited_locations else [],
+                    "terrain": loc_data.get("terrain", "Unknown"),
+                    "danger_level": loc_data.get("danger_level", "Unknown") if loc_id in player_visited_locations else "???",
+                    "points_of_interest": loc_data.get("points_of_interest", []) if loc_id in player_visited_locations else [],
+                    # Additional environmental details
+                    "ambient": loc_data.get("ambient_text", ""),
+                    "environment_type": loc_data.get("environment_type", "Standard"),
+                    "recommended_level": loc_data.get("recommended_level", "Any")
+                }
+            }
+            map_locations.append(location_info)
     
     return {
         "zone_name": current_zone_name,
@@ -2496,6 +2514,13 @@ def process_command(full_command_input):
             print("\nYou are carrying:")
             for item_id in player.inventory: print(f"  - {items_data.get(item_id, {}).get('name', item_id.replace('_',' '))}")
         else: print("Your inventory is empty.")
+    # NEW: Add examine/survey command here
+    elif command == "examine" or command == "survey":
+        loc_data = locations.get(player.current_location_id, {})
+        print(f"\nEnvironment Type: {loc_data.get('environment_type', 'Standard')}")
+        print(f"Recommended Level: {loc_data.get('recommended_level', 'Any')}")
+        if loc_data.get('ambient_text'):
+            print(f"\nAmbience: {loc_data['ambient_text']}")
     elif command == "use":
         if len(args) < 3 or args[1] != "on": print("How to use: 'use <item_name> on <target_name>'")
         else:
