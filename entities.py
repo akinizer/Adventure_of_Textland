@@ -222,12 +222,16 @@ class NPC:
                  hp=10, max_hp=10, attack_power=1, loot=None,
                  dialogue_options=None, pre_combat_dialogue=None,
                  quest_item_needed=None, quest_reward_item=None, dialogue_after_quest_complete=None,
-                 dialogue_after_quest_incomplete=None, quest_reward_currency=0):
+                 dialogue_after_quest_incomplete=None, quest_reward_currency=0, wares=None, stock=None):
         self.id = npc_id
         self.name = name
         self.description = description
         self.dialogue = dialogue # Default dialogue
         self.type = npc_type
+        # Merchant specific attributes
+        self.wares = wares if wares is not None else {}
+        self.stock = stock if stock is not None else {}
+        # Combat related attributes
         self.hostile = hostile
         self.hp = hp
         self.max_hp = max_hp
@@ -249,3 +253,17 @@ class NPC:
         self.hp -= amount
         if self.hp < 0:
             self.hp = 0
+    
+    def get_item_price(self, item_id):
+        """Get price of an item if NPC sells it"""
+        return self.wares.get(item_id)
+        
+    def has_stock(self, item_id):
+        """Check if item is in stock"""
+        stock_amount = self.stock.get(item_id, 0)
+        return stock_amount == -1 or stock_amount > 0
+        
+    def reduce_stock(self, item_id):
+        """Reduce stock after purchase"""
+        if self.stock.get(item_id, 0) > 0:
+            self.stock[item_id] -= 1

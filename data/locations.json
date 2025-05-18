@@ -2,12 +2,13 @@
     "eldoria_city_node": {
         "name": "City of Eldoria",
         "zone": "Eldoria",
-        "map_x": 1,
-        "map_y": 1,
+        "map_x": 7,
+        "map_y": 4,
         "description": "The majestic city of Eldoria stands before you, its gates welcoming travelers. Roads lead south towards the countryside.",
         "exits": {
             "south": "southern_road_1",
-            "east": "deep_woods"
+            "east": "deep_woods",
+            "west": "western_plains_1"
         },
         "city_map_transitions": {
             "enter": { 
@@ -19,18 +20,23 @@
     "southern_road_1": {
         "name": "Southern Road - Part 1",
         "zone": "SouthernRoad",
-        "map_x": 1, 
-        "map_y": 2,
+        "map_x": 7, 
+        "map_y": 5,
         "description": "You are on a dusty road leading south from Eldoria. Fields stretch to either side. To the east, you spot the dark opening of a cave. The road continues south.",
-        "exits": {"north": "eldoria_city_node", "south": "southern_road_2", "east": "gloomy_cave_entrance"},
+        "exits": {
+            "north": "eldoria_city_node", 
+            "east": "gloomy_cave_entrance",
+            "south": "crossroads_1", 
+            "west": "wheat_fields"
+        },
         "items": [],
         "npcs": {}
     },
     "gloomy_cave_entrance": {
         "name": "Gloomy Cave Entrance",
         "zone": "SouthernRoad",
-        "map_x": 2,
-        "map_y": 3,
+        "map_x": 8,
+        "map_y": 5,
         "description": "The air is cold and damp around this dark cave mouth. Strange noises echo from within. This looks like a dangerous place.",
         "exits": {"west": "southern_road_1"},
         "items": ["rusty_key"],
@@ -65,23 +71,59 @@
             }
         }
     },
+    "crossroads_1": {
+        "name": "Dusty Crossroads",
+        "zone": "SouthernRoad",
+        "map_x": 7,
+        "map_y": 6,
+        "description": "A weathered signpost marks this dusty intersection. Paths branch in multiple directions.",
+        "exits": {
+            "north": "southern_road_1",
+            "east": "forest_trail_1",
+            "south": "southern_road_2",
+            "west": "riverside_path"
+        },
+        "items": [],
+        "npcs": {}
+    },
     "southern_road_2": {
         "name": "Southern Road - Part 2",
         "zone": "SouthernRoad",
-        "map_x": 1, 
-        "map_y": 3,
+        "map_x": 7,
+        "map_y": 7,
         "description": "The road continues south, leading directly to the Town of Riverford. The path north leads back towards Eldoria.",
-        "exits": {"north": "southern_road_1", "south": "riverford_city_node"},
+        "exits": {
+            "north": "crossroads_1", 
+            "south": "riverford_bridge",
+            "east": "eastern_woods_1"
+        },
+        "items": [],
+        "npcs": {}
+    },
+    "riverford_bridge": {
+        "name": "Riverford Bridge",
+        "zone": "Riverford",
+        "map_x": 7, 
+        "map_y": 8,
+        "description": "A sturdy stone bridge spans the wide river. Riverford's gates are visible to the south.",
+        "exits": {
+            "north": "southern_road_2",
+            "south": "riverford_city_node",
+            "east": "riverside_dock"
+        },
         "items": [],
         "npcs": {}
     },
     "riverford_city_node": {
         "name": "Town of Riverford",
         "zone": "Riverford",
-        "map_x": 1, 
-        "map_y": 4,
+        "map_x": 7,
+        "map_y": 9,
         "description": "The quaint town of Riverford lies before you, its northern gates open. A road leads north out of town.",
-        "exits": {"north": "southern_road_2","east": "eastern_forest_edge_riverford"},
+        "exits": {
+            "north": "riverford_bridge",
+            "west": "fishermans_wharf"
+        },
         "city_map_transitions": {
             "enter": {
                 "city_id": "riverford",
@@ -94,12 +136,12 @@
      "deep_woods": {
         "name": "Deep Woods",
         "zone": "WhisperingWoods",
-        "map_x": 2, 
-        "map_y": 1,
+        "map_x": 8,
+        "map_y": 4,
         "description": "You are deep within the woods. It's eerily quiet. The path back south is the only clear way out.\nYou spot a small, old chest on the ground.",
         "exits": {
-            "east": "forest_entrance_placeholder",
-            "west": "eldoria_city_node"
+            "west": "eldoria_city_node",
+            "east": "forest_entrance_placeholder"
         }, 
         "items": [],
         "features": {
@@ -117,8 +159,8 @@
     "forest_entrance_placeholder": {
         "name": "Edge of the Deep Woods",
         "zone": "WhisperingWoods",
-        "map_x": 3, 
-        "map_y": 1,
+        "map_x": 9, 
+        "map_y": 4,
         "description": "You are at an entrance to the Deep Woods. It looks untamed.",
         "exits": {
             "west": "deep_woods", 
@@ -142,8 +184,8 @@
     "whispering_woods_path": {
         "name": "Whispering Woods Path",
         "zone": "WhisperingWoods",
-        "map_x": 4, 
-        "map_y": 1,
+        "map_x": 10, 
+        "map_y": 4,
         "description": "A winding path through the Whispering Woods. Sunlight dapples through the leaves. You hear rustling nearby.",
         "environment_type": "Enchanted Forest Path",
         "recommended_level": "1-3",
@@ -203,8 +245,8 @@
     "ancient_grove": {
         "name": "Ancient Grove",
         "zone": "WhisperingWoods",
-        "map_x": 5,
-        "map_y": 1,
+        "map_x": 11,
+        "map_y": 4,
         "description": "A serene grove with a very old, wise-looking tree at its center.",
         "environment_type": "Sacred Forest Sanctuary",
         "recommended_level": "2-4",
@@ -230,5 +272,113 @@
             }
         },
         "npcs": {}
+    },
+    "western_plains_1": {
+        "name": "Western Plains",
+        "zone": "WesternPlains",
+        "map_x": 6,
+        "map_y": 4,
+        "description": "Rolling grasslands stretch out before you. A warm breeze carries the scent of wild flowers.",
+        "exits": {
+            "east": "eldoria_city_node"
+        },
+        "items": ["wild_herbs"],
+        "npcs": {}
+    },
+    "wheat_fields": {
+        "name": "Golden Wheat Fields",
+        "zone": "SouthernRoad",
+        "map_x": 6,
+        "map_y": 5,
+        "description": "Vast fields of golden wheat sway gently in the breeze. A well-worn path cuts through the crops.",
+        "exits": {
+            "east": "southern_road_1"
+        },
+        "items": [],
+        "features": {
+            "wheat_stalks": {
+                "description": "Tall stalks of golden wheat ready for harvest.",
+                "actions": {
+                    "gather": {
+                        "outcomes": [
+                            {"type": "item", "item_id": "wheat_bundle", "message": "You gather some wheat into a bundle."}
+                        ]
+                    }
+                }
+            }
+        },
+        "npcs": {}
+    },
+    "forest_trail_1": {
+        "name": "Forest Trail",
+        "zone": "EasternWoods",
+        "map_x": 8,
+        "map_y": 6,
+        "description": "A narrow trail winds through dense forest. Shadows dance between the trees.",
+        "exits": {
+            "west": "crossroads_1",
+            "east": "eastern_woods_1"
+        },
+        "items": ["forest_mushrooms"],
+        "npcs": {}
+    },
+    "riverside_path": {
+        "name": "Riverside Path",
+        "zone": "Riverford",
+        "map_x": 6,
+        "map_y": 6,
+        "description": "A peaceful path runs alongside a gently flowing river. Fish occasionally break the surface.",
+        "exits": {
+            "east": "crossroads_1"
+        },
+        "items": [],
+        "features": {
+            "fishing_spot": {
+                "description": "A good spot for fishing by the river's edge.",
+                "actions": {
+                    "fish": {
+                        "outcomes": [
+                            {"type": "item", "item_id": "fresh_fish", "message": "You catch a fish!"},
+                            {"type": "message", "message": "The fish got away..."}
+                        ],
+                        "probabilities": [0.6, 0.4]
+                    }
+                }
+            }
+        },
+        "npcs": {}
+    },
+    "fishermans_wharf": {
+        "name": "Fisherman's Wharf",
+        "zone": "Riverford",
+        "map_x": 6,
+        "map_y": 9,
+        "description": "A busy wharf where fishing boats dock. The smell of salt and fish fills the air.",
+        "exits": {
+            "east": "riverford_city_node"
+        },
+        "items": ["fishing_rod"],
+        "npcs": {
+            "old_fisherman": {
+                "name": "Old Fisherman",
+                "description": "A weathered fisherman mending his nets.",
+                "hostile": false,
+                "dialogue": "Ah, looking to try your luck at fishing? The river's been good to us lately.",
+                "type": "merchant",
+                "dialogue_options": {
+                    "1": {"text": "Show me what you have for sale.", "action": "show_wares"},
+                    "2": {"text": "Any fishing tips?", "action": "chat", "response": "Keep your line steady and be patient. The fish will come."},
+                    "3": {"text": "Goodbye.", "action": "end_conversation"}
+                },
+                "wares": {
+                    "fishing_bait": 5,
+                    "small_net": 15
+                },
+                "stock": {
+                    "fishing_bait": -1,
+                    "small_net": 3
+                }
+            }
+        }
     }
 }
