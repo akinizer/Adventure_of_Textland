@@ -1,0 +1,42 @@
+{
+    "teleport": {
+        "portal": {
+            "type": "instant",
+            "properties": {
+                "requires_focus": true,
+                "schedule": "all_day",
+                "mana_cost": 50,
+                "cooldown": 3600
+            }
+        }
+    },
+    "transport": {
+        "ferry": {
+            "type": "transport",
+            "properties": {
+                "requires_dock": true,
+                "schedule": "all_day",
+                "cost": 5,
+                "cooldown": 120
+            }
+        },
+        "carriage": {
+            "type": "transport", 
+            "properties": {
+                "requires_station": true,
+                "schedule": "day_only",
+                "cost": 15,
+                "cooldown": 180
+            }
+        },
+        "ship": {
+            "type": "transport",
+            "properties": {
+                "requires_harbor": true,
+                "schedule": "all_day",
+                "cost": 30,
+                "cooldown": 600
+            }
+        }
+    }
+}
