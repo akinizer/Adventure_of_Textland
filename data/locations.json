@@ -478,7 +478,7 @@
         "description": "A long wooden dock stretches over the river. Small boats ferry people between here and the coastal road.",
         "exits": {
             "west": "riverford_bridge",
-            "north": "eastern_forest_path_1"
+            "north": "forest_path_east_1"
         },
         "features": {
             "ferry_stop": {
