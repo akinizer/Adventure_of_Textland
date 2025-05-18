@@ -95,7 +95,7 @@
         "exits": {
             "north": "crossroads_1", 
             "south": "riverford_bridge",
-            "east": "eastern_woods_1"
+            "east": "forest_path_east_1"
         },
         "items": [],
         "npcs": {}
@@ -255,13 +255,13 @@
         "danger_level": "Safe",
         "points_of_interest": [
             "Wise Old Tree",
-            "Sacred Spring",
+            "Sacred Spring", 
             "Ancient Stone Circle",
             "Meditation Spots"
         ],
         "exits": {
             "west": "whispering_woods_path",
-            "south": "mystic_woods_path"
+            "south": "mystic_woods_path_1"
         },
         "features": {
             "wise_old_tree": {
@@ -315,11 +315,10 @@
         "zone": "EasternWoods",
         "map_x": 8,
         "map_y": 6,
-        "description": "A narrow trail winds through dense forest. Shadows dance between the trees.",
+        "description": "A narrow trail winds through dense forest. Shadows dance between the trees. The trail continues west towards the crossroads and south into a denser part of the forest.",
         "exits": {
             "west": "crossroads_1",
-            "east": "forest_path_connector",
-            "south": "eastern_woods_1"
+            "south": "forest_path_east_1"
         },
         "items": ["forest_mushrooms"],
         "npcs": {}
@@ -355,10 +354,11 @@
         "zone": "Riverford",
         "map_x": 6,
         "map_y": 9,
-        "description": "A busy wharf where fishing boats dock. The smell of salt and fish fills the air.",
+        "description": "A busy wharf where fishing boats dock. The smell of salt and fish fills the air. Paths lead east towards Riverford proper and towards the coastal paths.",
         "exits": {
-            "east": "riverford_city_node"
-        },
+            "east": "riverford_city_node", 
+            "south": "coastal_path_1"
+        }, 
         "items": ["fishing_rod"],
         "npcs": {
             "old_fisherman": {
@@ -391,7 +391,7 @@
         "description": "A mysterious city shrouded in perpetual mist, its spires piercing through the fog. The west gate connects to the forest road, while the north path leads into mystical woods.",
         "exits": {
             "west": "forest_road_1",
-            "north": "ancient_grove"
+            "north": "mystic_woods_path_2"
         },
         "city_map_transitions": {
             "enter": {
@@ -409,7 +409,7 @@
         "description": "A well-maintained road cutting through the dense forest. Misthaven's mists can be seen to the east, while trading caravans frequently travel west towards the crossroads.",
         "exits": {
             "east": "misthaven_city_node",
-            "west": "forest_path_connector"
+            "west": "forest_path_east_2"
         },
         "items": [],
         "npcs": {
@@ -452,7 +452,7 @@
         "description": "A scenic road following the coastline. Bayside's port is visible to the south, while Riverford can be reached by heading northeast.",
         "exits": {
             "south": "bayside_city_node",
-            "northeast": "fishermans_wharf"
+            "east": "coastal_path_3"
         },
         "items": ["shells"],
         "features": {
@@ -470,20 +470,6 @@
             }
         }
     },
-    "eastern_woods_1": {
-        "name": "Eastern Woods",
-        "zone": "EasternWoods",
-        "map_x": 8,
-        "map_y": 7,
-        "description": "Dense woods with paths leading in multiple directions. A well-worn road heads east towards Misthaven.",
-        "exits": {
-            "west": "southern_road_2",
-            "east": "forest_road_1",
-            "north": "forest_trail_1"
-        },
-        "items": ["woodcutters_axe"],
-        "npcs": {}
-    },
     "riverside_dock": {
         "name": "Riverside Dock",
         "zone": "Riverford",
@@ -492,7 +478,7 @@
         "description": "A long wooden dock stretches over the river. Small boats ferry people between here and the coastal road.",
         "exits": {
             "west": "riverford_bridge",
-            "south": "coastal_road_1"
+            "north": "eastern_forest_path_1"
         },
         "features": {
             "ferry_stop": {
@@ -515,27 +501,53 @@
             }
         }
     },
-    "forest_path_connector": {
-        "name": "Forest Path",
+    "forest_path_east_1": {
+        "name": "Eastern Forest Path",
+        "zone": "EasternWoods",
+        "map_x": 8,
+        "map_y": 7,
+        "description": "A path winding through the dense forest. The southern road lies west, while deeper forest paths continue east. A trail leads north deeper into the woods.",
+        "exits": {
+            "west": "southern_road_2",
+            "east": "forest_path_east_2",
+            "north": "forest_trail_1"
+        },
+        "items": ["woodcutters_axe"],
+        "npcs": {}
+    },
+    "forest_path_east_2": {
+        "name": "Deep Forest Path",
         "zone": "EasternWoods",
         "map_x": 9,
-        "map_y": 6,
-        "description": "A winding path through the forest. The trail splits north and south.",
+        "map_y": 7,
+        "description": "The forest grows thicker here. Forest sounds echo all around.",
         "exits": {
-            "west": "forest_trail_1",
+            "west": "forest_path_east_1",
             "east": "forest_road_1"
         },
         "items": [],
-        "npcs": {}
+        "npcs": {},
+        "features": {
+            "fallen_tree": {
+                "description": "A massive fallen tree covered in moss.",
+                "actions": {
+                    "search": {
+                        "outcomes": [
+                            {"type": "item", "item_id": "forest_herbs", "message": "You find some rare herbs growing on the tree!"}
+                        ]
+                    }
+                }
+            }
+        }
     },
     "coastal_path_1": {
         "name": "Upper Coastal Path",
         "zone": "Riverford",
         "map_x": 6,
-        "map_y": 9,
-        "description": "A path along the river, connecting the dock to the coastal road.",
+        "map_y": 10,
+        "description": "A winding path along the coast. Fisherman's Wharf lies to the north, while the path continues south towards Bayside.",
         "exits": {
-            "north": "riverside_dock",
+            "north": "fishermans_wharf",
             "south": "coastal_path_2"
         },
         "items": [],
@@ -544,28 +556,63 @@
     "coastal_path_2": {
         "name": "Lower Coastal Path",
         "zone": "Riverford",
-        "map_x": 5,
-        "map_y": 10,
-        "description": "The coastal path continues south towards Bayside.",
+        "map_x": 6,
+        "map_y": 11,
+        "description": "The coastal path nears Bayside. The dockside market can be seen to the east.",
         "exits": {
             "north": "coastal_path_1",
+            "west": "dockside_market"
+        },
+        "items": [],
+        "npcs": {}
+    },
+    "coastal_path_3": {
+        "name": "Shoreline Path",
+        "zone": "Riverford",
+        "map_x": 5,
+        "map_y": 10,
+        "description": "The path curves along the shoreline. Bayside's walls are visible to the south.",
+        "exits": {
+            "south": "dockside_market",
             "west": "coastal_road_1" 
         },
         "items": [],
         "npcs": {}
     },
-    "mystic_woods_path": {
-        "name": "Mystic Woods Path",
+    "mystic_woods_path_1": {
+        "name": "Upper Mystic Woods Path",
         "zone": "Misthaven",
         "map_x": 11,
         "map_y": 5,
-        "description": "A misty path connecting the Ancient Grove to Misthaven.",
+        "description": "A misty path winding through ancient trees. The Ancient Grove lies to the north.",
         "exits": {
             "north": "ancient_grove",
-            "south": "misthaven_city_node"
+            "south": "mystic_woods_path_2"
         },
         "items": [],
         "npcs": {}
+    },
+    "mystic_woods_path_2": {
+        "name": "Lower Mystic Woods Path",
+        "zone": "Misthaven",
+        "map_x": 11,
+        "map_y": 6,
+        "description": "The mist grows thicker here. Misthaven's spires can be seen looming to the south.",
+        "exits": {
+            "north": "mystic_woods_path_1",
+            "south": "misthaven_city_node"
+        },
+        "items": [],
+        "features": {
+            "strange_mist": {
+                "description": "The mist seems to move with an otherworldly purpose.",
+                "actions": {
+                    "examine": {
+                        "outcomes": [{"type": "message", "message": "Shapes seem to form and dissolve in the mist..."}]
+                    }
+                }
+            }
+        }
     },
     "dockside_market": {
         "name": "Dockside Market",
@@ -574,8 +621,9 @@
         "map_y": 11,
         "description": "A bustling market near the docks. Merchants sell goods from distant lands.",
         "exits": {
+            "north": "coastal_path_3",
             "west": "bayside_city_node",
-            "north": "coastal_path_2"
+            "east": "coastal_path_2"
         },
         "items": [],
         "npcs": {}
