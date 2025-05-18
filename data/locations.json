@@ -260,7 +260,8 @@
             "Meditation Spots"
         ],
         "exits": {
-            "west": "whispering_woods_path"
+            "west": "whispering_woods_path",
+            "south": "mystic_woods_path"
         },
         "features": {
             "wise_old_tree": {
@@ -317,7 +318,8 @@
         "description": "A narrow trail winds through dense forest. Shadows dance between the trees.",
         "exits": {
             "west": "crossroads_1",
-            "east": "eastern_woods_1"
+            "east": "forest_path_connector",
+            "south": "eastern_woods_1"
         },
         "items": ["forest_mushrooms"],
         "npcs": {}
@@ -380,5 +382,202 @@
                 }
             }
         }
+    },
+    "misthaven_city_node": {
+        "name": "City of Misthaven",
+        "zone": "Misthaven",
+        "map_x": 11,
+        "map_y": 7,
+        "description": "A mysterious city shrouded in perpetual mist, its spires piercing through the fog. The west gate connects to the forest road, while the north path leads into mystical woods.",
+        "exits": {
+            "west": "forest_road_1",
+            "north": "ancient_grove"
+        },
+        "city_map_transitions": {
+            "enter": {
+                "city_id": "misthaven",
+                "entry_point_key": "from_west_gate"
+            }
+        },
+        "on_arrival_message": "The ethereal mists of Misthaven swirl around you."
+    },
+    "forest_road_1": {
+        "name": "Forest Road",
+        "zone": "EasternWoods",
+        "map_x": 10,
+        "map_y": 7,
+        "description": "A well-maintained road cutting through the dense forest. Misthaven's mists can be seen to the east, while trading caravans frequently travel west towards the crossroads.",
+        "exits": {
+            "east": "misthaven_city_node",
+            "west": "forest_path_connector"
+        },
+        "items": [],
+        "npcs": {
+            "traveling_merchant": {
+                "name": "Traveling Merchant",
+                "description": "A cheerful merchant with a heavily laden pack mule.",
+                "hostile": false,
+                "dialogue": "Heading to Misthaven? Watch out for the fog - easy to lose your way!",
+                "type": "quest_giver_simple",
+                "quest_item_needed": "lost_ledger",
+                "quest_reward_item": "merchants_map",
+                "dialogue_after_quest_incomplete": "If you find my ledger in the mists, I'll make it worth your while!",
+                "dialogue_after_quest_complete": "My ledger! Thank you! Here's a map I've made of the safest routes."
+            }
+        }
+    },
+    "bayside_city_node": {
+        "name": "City of Bayside",
+        "zone": "Bayside",
+        "map_x": 4,
+        "map_y": 11,
+        "description": "A bustling port city with ships from distant lands. The docks stretch along the southern shore, while the north road leads to Riverford.",
+        "exits": {
+            "north": "coastal_road_1",
+            "east": "dockside_market"
+        },
+        "city_map_transitions": {
+            "enter": {
+                "city_id": "bayside",
+                "entry_point_key": "from_north_gate"
+            }
+        },
+        "on_arrival_message": "Salt air and seabird calls welcome you to Bayside."
+    },
+    "coastal_road_1": {
+        "name": "Coastal Road",
+        "zone": "Riverford", 
+        "map_x": 4,
+        "map_y": 10,
+        "description": "A scenic road following the coastline. Bayside's port is visible to the south, while Riverford can be reached by heading northeast.",
+        "exits": {
+            "south": "bayside_city_node",
+            "northeast": "fishermans_wharf"
+        },
+        "items": ["shells"],
+        "features": {
+            "tidepool": {
+                "description": "A shallow pool left by the retreating tide.",
+                "actions": {
+                    "search": {
+                        "outcomes": [
+                            {"type": "item", "item_id": "pearl", "message": "You find a small pearl!"},
+                            {"type": "message", "message": "You find some interesting shells, but nothing valuable."}
+                        ],
+                        "probabilities": [0.2, 0.8]
+                    }
+                }
+            }
+        }
+    },
+    "eastern_woods_1": {
+        "name": "Eastern Woods",
+        "zone": "EasternWoods",
+        "map_x": 8,
+        "map_y": 7,
+        "description": "Dense woods with paths leading in multiple directions. A well-worn road heads east towards Misthaven.",
+        "exits": {
+            "west": "southern_road_2",
+            "east": "forest_road_1",
+            "north": "forest_trail_1"
+        },
+        "items": ["woodcutters_axe"],
+        "npcs": {}
+    },
+    "riverside_dock": {
+        "name": "Riverside Dock",
+        "zone": "Riverford",
+        "map_x": 8,
+        "map_y": 8,
+        "description": "A long wooden dock stretches over the river. Small boats ferry people between here and the coastal road.",
+        "exits": {
+            "west": "riverford_bridge",
+            "south": "coastal_road_1"
+        },
+        "features": {
+            "ferry_stop": {
+                "description": "A small ferry service operates here.",
+                "actions": {
+                    "take_ferry": {
+                        "outcomes": [
+                            {"type": "teleport", "destination": "coastal_road_1", "message": "You take the ferry downstream."}
+                        ]
+                    }
+                }
+            }
+        },
+        "npcs": {
+            "ferry_operator": {
+                "name": "Ferry Operator",
+                "description": "A weathered sailor manning the ferry.",
+                "hostile": false,
+                "dialogue": "Need a ride downstream? The ferry runs regular trips to the coast."
+            }
+        }
+    },
+    "forest_path_connector": {
+        "name": "Forest Path",
+        "zone": "EasternWoods",
+        "map_x": 9,
+        "map_y": 6,
+        "description": "A winding path through the forest. The trail splits north and south.",
+        "exits": {
+            "west": "forest_trail_1",
+            "east": "forest_road_1"
+        },
+        "items": [],
+        "npcs": {}
+    },
+    "coastal_path_1": {
+        "name": "Upper Coastal Path",
+        "zone": "Riverford",
+        "map_x": 6,
+        "map_y": 9,
+        "description": "A path along the river, connecting the dock to the coastal road.",
+        "exits": {
+            "north": "riverside_dock",
+            "south": "coastal_path_2"
+        },
+        "items": [],
+        "npcs": {}
+    },
+    "coastal_path_2": {
+        "name": "Lower Coastal Path",
+        "zone": "Riverford",
+        "map_x": 5,
+        "map_y": 10,
+        "description": "The coastal path continues south towards Bayside.",
+        "exits": {
+            "north": "coastal_path_1",
+            "west": "coastal_road_1" 
+        },
+        "items": [],
+        "npcs": {}
+    },
+    "mystic_woods_path": {
+        "name": "Mystic Woods Path",
+        "zone": "Misthaven",
+        "map_x": 11,
+        "map_y": 5,
+        "description": "A misty path connecting the Ancient Grove to Misthaven.",
+        "exits": {
+            "north": "ancient_grove",
+            "south": "misthaven_city_node"
+        },
+        "items": [],
+        "npcs": {}
+    },
+    "dockside_market": {
+        "name": "Dockside Market",
+        "zone": "Bayside",
+        "map_x": 5,
+        "map_y": 11,
+        "description": "A bustling market near the docks. Merchants sell goods from distant lands.",
+        "exits": {
+            "west": "bayside_city_node",
+            "north": "coastal_path_2"
+        },
+        "items": [],
+        "npcs": {}
     }
 }
