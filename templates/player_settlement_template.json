@@ -1,0 +1,50 @@
+{
+  "_comment_settlement_template": "Template for a player-owned settlement (isolated city).",
+  "settlement_id": "unique_settlement_id_789",
+  "name": "My First Settlement",
+  "is_player_owned": true,
+  "location": {
+    "world_map_node_id": "city_node_delta_3",
+    "coordinates": { "x": 1500.2, "y": 875.9, "z": 25.0 },
+    "_description_location": "Represents the settlement's position on the world map. Typically an isolated city node."
+  },
+  "is_isolated_city_node": true,
+
+  "city_decoration_system": {
+    "_comment_city_decoration": "System for placing and managing structures within the settlement. Allows edit mode to move buildings and environmental structures. Store and decorative structures can be purchased and placed on tiles.",
+    "edit_mode_active": false,
+    "_comment_edit_mode": "Player-toggled state for placing/moving structures.",
+    "available_plot_tiles": [
+      {
+        "tile_id": "plot_A1",
+        "size_category": "large_building_plot",
+        "coordinates_center_in_settlement": { "x": 10, "y": 10 },
+        "placed_structure_instance_id": null,
+        "_comment_tile": "Defined areas where structures can be placed."
+      },
+      {
+        "tile_id": "plot_B5",
+        "size_category": "medium_store_plot",
+        "coordinates_center_in_settlement": { "x": 50, "y": -20 },
+        "placed_structure_instance_id": "bldg_inst_market_001"
+      }
+    ]
+  },
+
+  "placed_buildings_and_structures": [
+    {
+      "structure_master_id": "master_bldg_general_store",
+      "instance_id": "bldg_inst_market_001",
+      "type": "store",
+      "_comment_type": "e.g., store (like a furniture store), decorative, residential, production, environmental (like a fountain or statue).",
+      "custom_name": "The Wandering Trader Stop",
+      "tile_id_location": "plot_B5",
+      "position_offset_on_tile": { "x": 0, "y": 0, "rotation_y": 0 },
+      "is_purchasable_by_player_for_placement": false, "_comment_purchasable": "Indicates if this specific instance was placed by player purchase, vs. pre-existing or unlocked via quest.",
+      "operational_status": "active",
+      "_comment_operational_status": "e.g., active, under_construction, damaged, needs_staff, provides_services (like selling furniture)."
+    }
+  ],
+
+  "_note_settlement_management": "Further details could include population, resources, defenses, tax income, upgradeable structures, etc., for a deeper city management experience."
+}

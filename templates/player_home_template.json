@@ -1,0 +1,88 @@
+{
+  "_comment_home_template": "Template for the player's designated home. This is an exclusive, special type of camp. Player can only have one.",
+  "camp_id_reference": "unique_camp_id_player_home",
+  "_comment_camp_id_reference": "The ID of the camp object that is designated as the home. This JSON represents the 'home-specific' properties or overrides for that camp.",
+  "is_home": true,
+  "_comment_is_home": "Indicates this camp is the player's primary residence and respawn point.",
+  "is_respawn_point": true,
+  "has_special_map_marker": true,
+  "_comment_special_map_marker": "A unique marker on the world map to distinguish it from other camps.",
+  "homescore_display_active": true,
+  "_comment_homescore_display": "The total homescore for this home is prominently displayed to the player.",
+
+  "name": "My Sweet Home",
+  "_comment_name": "Inherited or overridden from the base camp.",
+  "type": "upgraded_homestead",
+  "_comment_type": "Inherited or overridden from the base camp.",
+  "location": {
+    "world_map_node_id": "node_home_sweet_home",
+    "coordinates": { "x": 500.0, "y": 250.0, "z": 50.0 },
+    "_description_location": "Location of the home, inherited or specific."
+  },
+  "tier": 3,
+  "_comment_tier": "Home tier (I to X), acquired by reaching homescore thresholds. This is the primary display of 'Home Tiers'.",
+  "current_homescore": 1250,
+  "_comment_homescore": "Total score from unlocked flats/rooms, furniture, servants. This value determines the home tier. Only the 'home' camp's homescore is typically shown as the main 'Homescore'.",
+
+  "flats": [
+    {
+      "flat_id": "flat_home_ground_01",
+      "name": "Main House - Ground Floor",
+      "is_unlocked": true
+    },
+    {
+      "flat_id": "flat_home_cellar_01",
+      "name": "Cellar",
+      "is_unlocked": true,
+      "unlock_requirements": {
+        "homescore_needed_in_camp": 200,
+        "homescore_points_cost_player": 50
+      }
+    }
+  ],
+  "rooms": [
+    {
+      "flat_id_parent": "flat_home_ground_01",
+      "room_id": "room_home_living_g1",
+      "name": "Living Room",
+      "is_unlocked": true,
+      "is_free_on_creation": true
+    },
+    {
+      "flat_id_parent": "flat_home_ground_01",
+      "room_id": "room_home_kitchen_g1",
+      "name": "Kitchen",
+      "is_unlocked": true,
+      "unlock_requirements": {
+        "homescore_needed_in_camp": 100,
+        "homescore_points_cost_player": 20
+      }
+    }
+  ],
+
+  "decoration_system_active": true,
+  "edit_mode_active": false,
+
+  "placed_furnitures": [
+    {
+      "furniture_master_id": "master_sofa_comfy",
+      "instance_id": "furn_inst_uuid_home_001",
+      "room_id_location": "room_home_living_g1",
+      "position_in_room": { "x": 3.0, "y": 2.5, "rotation_y": 0 },
+      "is_usable": true,
+      "homescore_value": 75
+    }
+  ],
+  "placed_decorations": [],
+  "placed_servants": [
+    {
+      "servant_master_id": "master_servant_chef_gourmet",
+      "instance_id": "serv_inst_uuid_home_003",
+      "custom_name": "Chef Remy",
+      "room_id_location": "room_home_kitchen_g1",
+      "position_in_room": { "x": 1.0, "y": 1.0, "rotation_y": 270 },
+      "sells_item_categories": ["food_gourmet", "ingredients_rare"],
+      "homescore_value": 100
+    }
+  ]
+}

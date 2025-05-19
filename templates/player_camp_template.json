@@ -1,0 +1,98 @@
+{
+  "_comment_camp_template": "Template for a player-owned camp. Camps are isolated world map nodes with decoration systems.",
+  "camp_id": "unique_camp_id_123",
+  "name": "My First Camp",
+  "type": "basic_wilderness_camp",
+  "_comment_type": "Defines the camp's archetype, e.g., basic_wilderness, fortified_outpost, hidden_grove, riverside_fishing_spot. Player can own unlimited camps.",
+  "location": {
+    "world_map_node_id": "node_alpha_7",
+    "coordinates": { "x": 120.5, "y": 75.2, "z": 10.0 },
+    "_description_location": "Represents the camp's position on the world map. Typically an isolated node."
+  },
+  "is_isolated_node": true,
+  "has_map_marker": true,
+  "_comment_map_marker": "Indicates if a standard marker for this camp appears on the world map.",
+  "is_teleportable_to_by_player": true,
+  "tier": 1,
+  "_comment_tier": "Camp tier, potentially linked to homescore for 'home' camps, or other progression for general camps. (e.g., I to X)",
+  "current_homescore": 0,
+  "_comment_homescore": "Score accumulated by unlocking rooms/flats, placing furniture/servants. Primarily relevant if this camp IS the player's home, but could track for all camps.",
+
+  "flats": [
+    {
+      "flat_id": "flat_ground_01",
+      "name": "Ground Floor",
+      "is_unlocked": true,
+      "_comment_flat": "Camps start with one flat. More can be unlocked by reaching homescore thresholds and spending homescore points."
+    },
+    {
+      "flat_id": "flat_upper_01",
+      "name": "Upper Story",
+      "is_unlocked": false,
+      "unlock_requirements": {
+        "homescore_needed_in_camp": 500,
+        "homescore_points_cost_player": 100,
+        "_comment_unlock": "Requires player to have enough 'Homescore Points' (currency) and for this camp to reach a certain 'current_homescore' threshold."
+      }
+    }
+  ],
+  "rooms": [
+    {
+      "flat_id_parent": "flat_ground_01",
+      "room_id": "room_main_hall_g1",
+      "name": "Main Hall",
+      "is_unlocked": true,
+      "is_free_on_creation": true,
+      "_comment_room": "Each camp starts with a flat, some free rooms, and many locked rooms. Unlock with homescore and homescore points."
+    },
+    {
+      "flat_id_parent": "flat_ground_01",
+      "room_id": "room_storage_g1",
+      "name": "Storage Closet",
+      "is_unlocked": false,
+      "is_free_on_creation": false,
+      "unlock_requirements": {
+        "homescore_needed_in_camp": 50,
+        "homescore_points_cost_player": 10
+      }
+    }
+  ],
+
+  "decoration_system_active": true,
+  "_comment_decoration_system": "Overall toggle for the decoration system within this camp. Allows edit mode for placing furnitures, decorations, servants on tiles within the camp layout.",
+  "edit_mode_active": false,
+  "_comment_edit_mode": "Player-toggled state for placing/moving/rotating/appraising items.",
+
+  "placed_furnitures": [
+    {
+      "furniture_master_id": "master_bed_simple",
+      "instance_id": "furn_inst_uuid_001",
+      "room_id_location": "room_main_hall_g1",
+      "position_in_room": { "x": 2.0, "y": 1.5, "rotation_y": 90 },
+      "is_usable": true,
+      "homescore_value": 20,
+      "_comment_furniture": "Usable or decorative items. Purchasable from servants or city furniture stores. Counts toward homescore."
+    }
+  ],
+  "placed_decorations": [
+    {
+      "decoration_master_id": "master_rug_bearskin",
+      "instance_id": "deco_inst_uuid_002",
+      "room_id_location": "room_main_hall_g1",
+      "position_in_room": { "x": 3.0, "y": 0.1, "rotation_y": 0 },
+      "homescore_value": 10
+    }
+  ],
+  "placed_servants": [
+    {
+      "servant_master_id": "master_servant_vendor_general",
+      "instance_id": "serv_inst_uuid_003",
+      "custom_name": "Bob the Seller",
+      "room_id_location": "room_main_hall_g1",
+      "position_in_room": { "x": 5.0, "y": 4.0, "rotation_y": 180 },
+      "sells_item_categories": ["decorations_basic", "food_simple", "materials_common"],
+      "homescore_value": 50,
+      "_comment_servant": "Recruited or hired NPCs that sell decorations, food, materials, and misc items inside camps. Contribute to homescore."
+    }
+  ]
+}

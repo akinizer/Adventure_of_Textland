@@ -1,0 +1,27 @@
+{
+  "_comment_player_data": "Overview of how player properties (camps, home, settlements) might be structured at a higher player data level.",
+  "player_id": "player_unique_id_001",
+  "character_name": "HeroName",
+
+  "currencies": {
+    "gold": 10000,
+    "gems": 500,
+    "homescore_points": 250,
+    "_comment_homescore_points": "Currency earned by purchasing camps, completing 'homestore' quests, and achievements. Spent to unlock flats and rooms in camps/home."
+  },
+
+  "owned_camps_ids": [
+    "unique_camp_id_123",
+    "unique_camp_id_player_home",
+    "unique_camp_id_456"
+  ],
+  "_comment_camps": "List of IDs referencing individual camp data objects. Player can own an unlimited number of camps.",
+
+  "home_camp_id": "unique_camp_id_player_home",
+  "_comment_home": "The ID of the camp currently designated as the player's home. There should only be one such designation.",
+
+  "owned_settlements_ids": [
+    "unique_settlement_id_789"
+  ],
+  "_comment_settlements": "List of IDs referencing individual settlement data objects."
+}

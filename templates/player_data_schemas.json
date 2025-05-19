@@ -1,0 +1,17 @@
+{
+    "settlements": {
+        "_comment": "Array of identifiers or summary objects for player-owned settlements. The full structure for each settlement object is defined in 'player_settlement_template.json' (located in /templates/). Example summary fields: settlement_id, name, world_map_node_id.",
+        "value": []
+    },
+    "home": {
+        "_comment": "Identifier or summary object for the player's designated home. The home is a special type of camp. Its full structure is defined in 'player_home_template.json' and 'player_camp_template.json' (located in /templates/). Example fields: camp_id_reference, name.",
+        "value": {
+        }
+    },
+    "camps": {
+        "_comment": "Array of identifiers or summary objects for other player-owned camps. The full structure for each camp object is defined in 'player_camp_template.json' (located in /templates/). Example summary fields: camp_id, name, world_map_node_id.",
+        "value": [
+        ]
+    },
+    "_schema_note": "This file outlines how player-owned camps, home, and settlements might be referenced within a larger player data structure. For the detailed JSON structure of each entity type, please refer to their respective template files (e.g., player_camp_template.json, player_home_template.json, player_settlement_template.json) also located in the /templates/ directory."
+}
