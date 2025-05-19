@@ -696,7 +696,7 @@ def process_feature_action(current_location_data, feature_name_input, action_nam
     """Process feature interactions with proper naming handling"""
     
     # Normalize feature name
-    feature_id = feature_name_input
+    feature_id = feature_name_input.lower().replace(" ", "_")
     
     # Find the feature in location's features
     features = current_location_data.get("features", {})
@@ -710,11 +710,34 @@ def process_feature_action(current_location_data, feature_name_input, action_nam
     # Get the action and handle outcomes based on farmable property
     action = feature["actions"][action_name_input]
     outcomes = action.get("outcomes", [])
+
+    # Special handling for 'examine' action
+    if action_name_input == "examine":
+        # Examination never triggers farming cooldowns or item rewards
+        return outcomes[0].get("message", f"You examine the {feature_id.replace('_', ' ')}.")
     
     if feature.get("farmable", False):
+        current_time = time.time()
+        last_harvested = feature.get("last_harvested")
+        respawn_time = feature.get("respawn_time", 300)  # Default 5 minutes
+
+        if last_harvested and (current_time - last_harvested) < respawn_time:
+            time_left = int(respawn_time - (current_time - last_harvested))
+            minutes = time_left // 60
+            seconds = time_left % 60
+            if minutes > 0:
+                return f"The {feature_id.replace('_', ' ')} needs more time to regrow. Check back in about {minutes} minute(s)."
+            else:
+                return f"The {feature_id.replace('_', ' ')} will be ready very soon (less than a minute)."        
         # Use probability system for farmable resources
         probabilities = [o.get("probability", 1.0/len(outcomes)) for o in outcomes]
         chosen_outcome = random.choices(outcomes, weights=probabilities, k=1)[0]
+
+        # Update last_harvested time if successful gathering
+        if chosen_outcome.get("type") == "item":
+            feature["last_harvested"] = current_time
+            if chosen_outcome.get("xp_reward"):
+                player_obj.add_xp(chosen_outcome["xp_reward"], log_event_func=log_game_event)
     else:
         chosen_outcome = outcomes[0]
     
@@ -727,8 +750,14 @@ def process_feature_action(current_location_data, feature_name_input, action_nam
             source=f"feature_{feature_id}_{action_name_input}",
             log_event_func=log_event_func
         )
-    
-    return chosen_outcome.get("message", f"You {action_name_input} the {feature_id.replace('_', ' ')}.")
+
+    message = chosen_outcome.get("message", f"You {action_name_input} the {feature_id.replace('_', ' ')}.")
+    if chosen_outcome.get("xp_reward"):
+        message += f" You gain {chosen_outcome['xp_reward']} XP."
+    return message
+
+# --- Flask Web Server Setup ---
+# This function is called to run the web server
 def run_minimal_web_server():
     global flask_app_instance
     if not flask_available:
