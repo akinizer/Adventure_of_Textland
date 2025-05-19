@@ -692,6 +692,43 @@ def handle_environmental_interaction(feature_id, action_verb):
         player.heal(chosen_outcome.get("amount", 0)) # Use method
         print(f"Your HP is now {player.hp}/{player.max_hp}.")
 
+def process_feature_action(current_location_data, feature_name_input, action_name_input, player_obj, items_master_data, game_logic_module, log_event_func=None):
+    """Process feature interactions with proper naming handling"""
+    
+    # Normalize feature name
+    feature_id = feature_name_input
+    
+    # Find the feature in location's features
+    features = current_location_data.get("features", {})
+    if feature_id not in features:
+        return f"There is no '{feature_id.replace('_', ' ')}' here."
+    
+    feature = features[feature_id]
+    if "actions" not in feature or action_name_input not in feature["actions"]:
+        return f"You can't {action_name_input} the {feature_id.replace('_', ' ')}."
+    
+    # Get the action and handle outcomes based on farmable property
+    action = feature["actions"][action_name_input]
+    outcomes = action.get("outcomes", [])
+    
+    if feature.get("farmable", False):
+        # Use probability system for farmable resources
+        probabilities = [o.get("probability", 1.0/len(outcomes)) for o in outcomes]
+        chosen_outcome = random.choices(outcomes, weights=probabilities, k=1)[0]
+    else:
+        chosen_outcome = outcomes[0]
+    
+    # Process the outcome
+    if chosen_outcome.get("type") == "item":
+        game_logic_module.award_item_to_player(
+            player_obj,
+            items_master_data,
+            chosen_outcome["item_id"],
+            source=f"feature_{feature_id}_{action_name_input}",
+            log_event_func=log_event_func
+        )
+    
+    return chosen_outcome.get("message", f"You {action_name_input} the {feature_id.replace('_', ' ')}.")
 def run_minimal_web_server():
     global flask_app_instance
     if not flask_available:
@@ -734,6 +771,11 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
     def process_game_action_route():
         data = request.get_json()
         action = data.get('action')
+
+        # Parse the action into command and arguments for broader command handling
+        action_parts_for_command = action.split(' ', 1)
+        parsed_command = action_parts_for_command[0].lower() # Ensure command is lowercase
+        parsed_args_list = action_parts_for_command[1].split(' ') if len(action_parts_for_command) > 1 and action_parts_for_command[1] else []
 
         # Ensure player object and essential keys exist, especially current_location_id
         if not player or player.current_location_id is None:
@@ -787,7 +829,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
              game_response["message"] = "Game not started. Please start the game first (this might require a terminal interaction if using --browser at launch without --autostart)."
              return jsonify(game_response)
 
-        if action == 'look':
+        if parsed_command == 'look' and not parsed_args_list: # 'look' without arguments
             loc_id = player.current_location_id
             if loc_id in locations:
                 # location_name and description already set by default above
@@ -796,8 +838,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 game_response["message"] = "" # Description is primary
             else:
                 game_response["message"] = "Current location is unknown."
-        elif action.startswith('go '):
-            direction = action.split(' ', 1)[1].lower() # Ensure direction is lowercase
+        elif parsed_command == 'go' and parsed_args_list:
+            direction = parsed_args_list[0].lower() # Ensure direction is lowercase
 
             if player.current_map_type == "city":
                 # --- City Map Movement ---
@@ -911,7 +953,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 game_response["message"] = "Error: Unknown map type for movement."
             # Note: game_response["location_name"] and game_response["description"] will be
             # populated by the final assembly logic based on the new player state.
-        elif action == "exit city" and player.current_map_type == "city":
+        elif parsed_command == "exit" and " ".join(parsed_args_list) == "city" and player.current_map_type == "city":
             current_city_map = city_maps_data.get(player.current_city_id)
             if current_city_map:
                 px, py = player.current_city_x, player.current_city_y
@@ -937,7 +979,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             else:
                 game_response["message"] = "Error: City data not found."
 
-        elif action == "enter city": # New block for "enter city" command
+        elif parsed_command == "enter" and " ".join(parsed_args_list) == "city":
             if player.current_map_type == "zone":
                 current_loc_id = player.current_location_id
                 current_location_data = locations.get(current_loc_id, {})
@@ -958,7 +1000,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                         player.current_city_x = entry_coords["x"]
                         player.current_city_y = entry_coords["y"]
                         # player.current_location_id remains the zone node for context
-                        game_response["message"] = f"You step through the gate and enter {city_map_details.get('name', city_id_to_enter.capitalize())}."
+                        game_response["message"] = f"You step through the ie and enter {city_map_details.get('name', city_id_to_enter.capitalize())}."
                         log_game_event("enter_city_map_via_command", {"from_zone_loc": current_loc_id, "to_city": city_id_to_enter, "coords": f"({entry_coords['x']},{entry_coords['y']})", "player_name": player.name})
                     else:
                         game_response["message"] = f"You are at an entrance, but the detailed map for {city_id_to_enter.capitalize()} seems inaccessible or misconfigured from here."
@@ -967,7 +1009,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             else: # Already in a city
                 game_response["message"] = "You are already inside a city."
 
-        elif action == 'inventory':
+        elif parsed_command == 'inventory' or parsed_command == 'i':
             # Ensure inventory key exists
             player_inventory = player.inventory
             if player_inventory:
@@ -984,7 +1026,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 game_response["message"] = "" 
             else:
                 game_response["message"] = "Your inventory is empty."
-        elif action == '!map':
+        elif parsed_command == '!map':
             # The draw_zone_map function now prints directly to terminal.
             # For the web UI, the zone map is in the side panel.
             # This command in the web input field can just acknowledge.
@@ -993,8 +1035,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             current_location_data_for_map_ack = locations.get(current_loc_id_for_map_ack, {})
             game_response["location_name"] = current_location_data_for_map_ack.get("name", "Unknown Area")
             game_response["description"] = current_location_data_for_map_ack.get("description", "An unfamiliar place.")
-        elif action.startswith('take '):
-            item_id_to_take = action.split(' ', 1)[1]
+        elif parsed_command == 'take' and parsed_args_list:
+            item_id_to_take = " ".join(parsed_args_list) # Rejoin args to get full item name
             current_loc_id = player.current_location_id
             location_data = locations.get(current_loc_id, {})
             room_items = location_data.get("items", [])
@@ -1018,7 +1060,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 game_response["location_name"] = location_data.get("name", "Unknown Area")
                 game_response["description"] = location_data.get("description", "An unfamiliar place.")
         
-        elif action == "open worn_crate" and player.current_location_id == "generic_start_room":
+        elif parsed_command == "open" and " ".join(parsed_args_list) == "worn_crate" and player.current_location_id == "generic_start_room":
             # This specific handler for "open worn_crate"
             crate = locations["generic_start_room"]["features"]["worn_crate"]
             if crate.get("closed"):
@@ -1071,9 +1113,9 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
 
             else:
                 game_response["message"] = "The crate is already open and empty."
-        elif action.startswith('unequip '):
-            item_id_to_unequip_from_action = action.split(' ', 1)[1]
+        elif parsed_command == 'unequip' and parsed_args_list:
             # Find the item in equipped slots
+            item_name_to_unequip = " ".join(parsed_args_list)
             slot_unequipped_from = None
             for slot_key, equipped_item_id in player.equipment.items():
                 if equipped_item_id == item_id_to_unequip_from_action: # Match by item ID
@@ -1090,27 +1132,23 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             current_loc_id_for_unequip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_unequip, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.")
-        elif action.startswith('set_player_preference '):
+        elif parsed_command == 'set_player_preference' and len(parsed_args_list) == 2:
             # Handle setting a player preference from the frontend
-            action_parts = action.split(' ', 2) # Split into verb, pref_name, value
-            if len(action_parts) == 3:
-                pref_name = action_parts[1]
-                pref_value_str = action_parts[2]
+            pref_name = parsed_args_list[0]
+            pref_value_str = parsed_args_list[1]
 
-                if pref_name == "auto_equip_from_inventory_panel_enabled":
-                    new_value = pref_value_str.lower() == 'true'
-                    if hasattr(player, 'preferences'):
-                        player.preferences[pref_name] = new_value
-                        save_player_data(player, reason_for_save=f"Preference '{pref_name}' updated via web")
-                        game_response["message"] = f"Preference '{pref_name}' set to {new_value}."
-                    else:
-                         game_response["message"] = f"Error: Player preferences not available."
+            if pref_name == "auto_equip_from_inventory_panel_enabled":
+                new_value = pref_value_str.lower() == 'true'
+                if hasattr(player, 'preferences'):
+                    player.preferences[pref_name] = new_value
+                    save_player_data(player, reason_for_save=f"Preference '{pref_name}' updated via web")
+                    game_response["message"] = f"Preference '{pref_name}' set to {new_value}."
                 else:
-                    game_response["message"] = f"Unknown preference: '{pref_name}'."
+                        game_response["message"] = f"Error: Player preferences not available."
             else:
-                game_response["message"] = "Invalid 'set_player_preference' format. Expected 'set_player_preference <name> <value>'."
+                game_response["message"] = f"Unknown preference: '{pref_name}'."
 
-        elif action == 'auto_equip_inventory':
+        elif parsed_command == 'auto_equip_inventory':
             # Iterate through inventory and auto-equip items if slots are empty
             items_auto_equipped = []
             # Iterate over a copy of the inventory because equip_item modifies the list
@@ -1143,8 +1181,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
                 game_response["message"] = "No suitable items in inventory could be automatically equipped to empty slots."
             # Location data will be populated by the final assembly logic
 
-        elif action.startswith('use_item_'): # New handler for using items from inventory
-            item_id_to_use = action.split('use_item_', 1)[1]
+        elif parsed_command == 'use_item' and parsed_args_list: # Handler for using items from inventory via button
+            item_id_to_use = parsed_args_list[0] # Assumes item_id is the first arg
 
             if item_id_to_use not in player.inventory:
                 game_response["message"] = f"You don't have {items_data.get(item_id_to_use, {}).get('name', item_id_to_use.replace('_',' '))} in your inventory."
@@ -1211,8 +1249,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             game_response["message"] += f"The {item_details.get('name', item_id_to_use.replace('_',' '))} is consumed." # Or "is now empty and discarded."
             game_response["description"] = locations.get(current_loc_id_for_unequip, {}).get("description", "An unfamiliar place.") # Fixed typo here
 
-        elif action.startswith('equip '):
-            item_id_to_equip = action.split(' ', 1)[1]
+        elif parsed_command == 'equip' and parsed_args_list:
+            item_id_to_equip = " ".join(parsed_args_list) # Rejoin for item name/id
             if item_id_to_equip in player.inventory:
                 item_details = items_data.get(item_id_to_equip)
                 if item_details and item_details.get("equip_slot"):
@@ -1227,7 +1265,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             current_loc_id_for_equip = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_equip, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_equip, {}).get("description", "An unfamiliar place.")
-        elif action == 'sort_inventory_by_id_action':
+        elif parsed_command == 'sort_inventory_by_id_action':
             if player.inventory:
                 player.inventory.sort() # Sorts the list of item IDs alphabetically
                 game_response["message"] = "Inventory sorted by ID."
@@ -1248,7 +1286,7 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             current_loc_id_for_sort = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_sort, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_sort, {}).get("description", "An unfamiliar place.")
-        elif action == '!save': # Handle !save command from text input
+        elif parsed_command == '!save': # Handle !save command from text input
             if not player.game_active or not player.name:
                 game_response["message"] = "Cannot save: No active character or game not started."
             else:
@@ -1265,8 +1303,8 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             current_loc_id_for_save_cmd_resp = player.current_location_id
             game_response["location_name"] = locations.get(current_loc_id_for_save_cmd_resp, {}).get("name", "Unknown Area")
             game_response["description"] = locations.get(current_loc_id_for_save_cmd_resp, {}).get("description", "An unfamiliar place.")
-        elif action.startswith('talk '):
-            npc_id_to_talk_to = action.split(' ', 1)[1]
+        elif parsed_command == 'talk' and parsed_args_list:
+            npc_id_to_talk_to = " ".join(parsed_args_list) # NPC name/id
             current_loc_id = player.current_location_id
             current_location_data = locations.get(current_loc_id, {})
             npcs_in_room = current_location_data.get("npcs", {}) # This now contains NPC objects
@@ -1302,6 +1340,57 @@ if flask_app_instance: # Only define routes if Flask app was successfully create
             
             game_response["location_name"] = current_location_data.get("name", "Unknown Area")
             game_response["description"] = current_location_data.get("description", "An unfamiliar place.")
+        # New generic feature interaction handler for web
+        elif parsed_command in [
+            'talk',       # Note: This might conflict with the specific 'talk' handler above if not careful with input
+            'attack',
+            'pick',
+            'gather',
+            'fish',
+            'search',
+            'use',        # Note: This is for 'use <feature_name>', distinct from 'use_item <item_id>'
+            'examine',    # Note: This is for 'examine <feature_name>', distinct from 'look' (examine room)
+            'read',
+            'touch',
+            'rest',
+            'kick',
+            'open',       # Note: This is for generic 'open <feature_name>', distinct from 'open worn_crate'
+            'close',
+            'take_ferry'
+        ] and parsed_args_list:
+            feature_name_from_web = " ".join(parsed_args_list)
+            # process_feature_action expects the feature name as typed (can have spaces),
+            # and it normalizes to an ID with underscores internally.
+            # However, the user's last version of process_feature_action in the main script
+            # was changed to expect the underscore version directly.
+            # Let's pass the underscore version to match that.
+            feature_id_for_web_call = feature_name_from_web.lower().replace(" ", "_")
+            
+            current_loc_data_for_web_feature_action = locations.get(player.current_location_id, {})
+            result = process_feature_action(
+                current_loc_data_for_web_feature_action,
+                feature_id_for_web_call, # Pass the ID (underscored version)
+                parsed_command,          # The verb
+                player,
+                items_data,
+                game_logic,
+                log_game_event
+            )
+            game_response["message"] = result
+            
+            # The user's requested inventory update snippet (specific to wheat_bundle)
+            # This is likely redundant as the final assembly already updates inventory_list
+            # but included as per the request.
+            if "wheat_bundle" in player.inventory:
+                game_response["inventory_list"] = [
+                    {
+                        "id": item_id,
+                        "name": items_data.get(item_id, {}).get("name", item_id.replace("_", " ")),
+                        "type": items_data.get(item_id, {}).get("type"),
+                        "equip_slot": items_data.get(item_id, {}).get("equip_slot")
+                    }
+                    for item_id in player.inventory
+                ]
         else:
             game_response["message"] = f"The action '{action}' is not fully implemented or recognized for the browser interface yet."
             # Ensure location details are still sent for unrecognized actions
@@ -2470,42 +2559,118 @@ def process_command(full_command_input):
     elif command == "open" and " ".join(args) == "worn crate": # Specific for starter task
         if player.current_location_id == "generic_start_room":
             crate = locations["generic_start_room"]["features"]["worn_crate"]
-            if crate["closed"]:
-                # Use the environmental interaction handler for consistency
-                handle_environmental_interaction("worn_crate", "open")
+            # Ensure the feature and its 'closed' attribute exist
+            if crate and "closed" in crate:
+                if crate["closed"]:
+                    # The old handle_environmental_interaction has specific logic for the starter crate,
+                    # including the auto-teleport. We keep this for now.
+                    # If process_feature_action were to fully replace it, that special logic would need to be
+                    # moved or triggered differently.
+                    handle_environmental_interaction("worn_crate", "open")
+                else:
+                    print("The crate is already open and empty.")
             else:
-                print("The crate is already open and empty.")
+                print("The worn crate here seems unusual or is missing details.")
         else:
-            print("There is no worn crate here to open.")
+            # Allow generic "open <feature_name>" if not the starter crate
+            feature_name_typed_by_player = " ".join(args)
+            result_message = process_feature_action(location_data, feature_name_typed_by_player, command, player, items_data, game_logic, log_game_event)
+            print(result_message)
+    # New generic feature interaction handler
+    elif command in [
+        
+        # NPC interactions (see review notes below)
+        'talk',
+        'attack',        
+
+        # Resource gathering
+        'pick',      # mushrooms, berries
+        'gather',    # wheat, herbs
+        'fish',      # fishing spots
+        'search',    # containers, areas
+        'use',       # For using items on features
+
+        # Information gathering
+        'examine',   # look at features
+        'read',      # signs, markers, books        
+
+        # Physical actions
+        'touch',     # wise old tree
+        'rest',      # rest spots
+        'kick',      # rocks, objects
+        
+        # Container actions
+        'open',      # chests, crates
+        'close',     # chests, crates
+        
+        # Transport
+        'take_ferry' # transport features
+    ] and args:
+        feature_name = " ".join(args).lower()  # Add .lower() for consistent matching
+        # Convert spaces to underscores to match feature IDs
+        feature_id = feature_name.replace(" ", "_")
+
+        # Note: 'talk' and 'attack' are typically handled by NPC-specific logic.
+        # If process_feature_action is intended for these, ensure features are defined accordingly.
+        result = process_feature_action(
+            location_data,    # current_location_data
+            feature_id,       # Use converted feature_id instead of raw feature_name
+            command,          # action_name_input
+            player,           # player_obj
+            items_data,       # items_master_data
+            game_logic,       # game_logic_module
+            log_game_event    # log_event_func
+        )
+        print(result)
+    # Add special handler for take_ferry since it's a transport action
+    elif command == "take_ferry":
+        feature_name = "ferry_stop"  # This should match the feature ID in locations.json
+        result_message = process_feature_action(location_data, 
+                                         feature_name, 
+                                         command, 
+                                         player, 
+                                         items_data, 
+                                         game_logic, 
+                                         log_game_event)
+        print(result_message)
+
+    elif command == "examine" and not args: # General room survey (if no arguments to examine)
+        # This is the existing general 'look' or 'examine' for the room itself
+        loc_data_examine = locations.get(player.current_location_id, {})
+        print(f"\nEnvironment Type: {loc_data_examine.get('environment_type', 'Standard')}")
+        print(f"Recommended Level: {loc_data_examine.get('recommended_level', 'Any')}")
+        if loc_data_examine.get('ambient_text'):
+            print(f"\nAmbience: {loc_data_examine['ambient_text']}")
     elif command == "take":
         if not args: print("Take what?")
-        else:
-            # This 'take' command logic should now work for items revealed from the crate
+        else: # This 'else' correctly corresponds to 'if not args:'
             item_name_input = " ".join(args)
             item_to_take = None # This will store the item_id if found, or "currency_handled"
-            room_items = location_data.get("items", []) # Get a mutable copy if modification is direct
+            # location_data is defined earlier in process_command
+            room_items = location_data.get("items", []) 
             
             # Iterate over a copy of room_items if removing while iterating
             for r_item_id in list(room_items): 
                 item_data = items_data.get(r_item_id, {})
                 current_item_name_lower = item_data.get("name", "").lower()
-                current_item_id_as_name = r_item_id.replace("_", " ")
+                # Allow matching by item ID as well (e.g., "take small_healing_potion")
+                current_item_id_as_name = r_item_id.replace("_", " ").lower()
 
                 if item_name_input == current_item_name_lower or item_name_input == current_item_id_as_name:
-                    if r_item_id == "small_pouch_of_coins":
+                    # Handle special items like coin pouches directly
+                    if r_item_id == "small_pouch_of_coins": # Example, adjust as needed
                         coin_value = item_data.get("value", 0)
                         player.add_coins(coin_value, log_event_func=log_game_event, source=f"take_room_{loc_id}_{r_item_id}")
                         print(f"You picked up the {item_data.get('name', r_item_id)} and gained {coin_value} copper coins.")
-                        room_items.remove(r_item_id) # Remove from the original list
+                        if r_item_id in room_items: room_items.remove(r_item_id)
                         item_to_take = "currency_handled" 
                         break 
                     else:
                         item_to_take = r_item_id
                         break 
-            
             if item_to_take and item_to_take != "currency_handled":
                 game_logic.award_item_to_player(player, items_data, item_to_take, source=f"take_room_{loc_id}", log_event_func=log_game_event) 
-                room_items.remove(item_to_take) # Remove from the original list
+                if item_to_take in room_items: room_items.remove(item_to_take)
             elif not item_to_take: # Only print if not found and not handled as currency
                 print(f"There is no {item_name_input} here to take.")
 
@@ -2515,12 +2680,7 @@ def process_command(full_command_input):
             for item_id in player.inventory: print(f"  - {items_data.get(item_id, {}).get('name', item_id.replace('_',' '))}")
         else: print("Your inventory is empty.")
     # NEW: Add examine/survey command here
-    elif command == "examine" or command == "survey":
-        loc_data = locations.get(player.current_location_id, {})
-        print(f"\nEnvironment Type: {loc_data.get('environment_type', 'Standard')}")
-        print(f"Recommended Level: {loc_data.get('recommended_level', 'Any')}")
-        if loc_data.get('ambient_text'):
-            print(f"\nAmbience: {loc_data['ambient_text']}")
+    # The 'examine' (no args) is handled above. 'examine <feature>' is handled by the new generic block.
     elif command == "use":
         if len(args) < 3 or args[1] != "on": print("How to use: 'use <item_name> on <target_name>'")
         else:
@@ -2600,16 +2760,10 @@ def process_command(full_command_input):
                  player.current_map_type = "zone"
                  # player.current_location_id is already set to the zone map entry point
              else: print("You are not currently inside a city.")
-             return True # Command processed
-
-        potential_target = " ".join(args)
-        target_feature_id = None
-        for f_id in location_data.get("features", {}).keys():
-            if potential_target == f_id.replace("_", " "):
-                target_feature_id = f_id
-                break
-        if target_feature_id and potential_verb in location_data["features"][target_feature_id].get("actions", {}):
-            handle_environmental_interaction(target_feature_id, potential_verb)
+        # The old fallback call to handle_environmental_interaction is now largely superseded
+        # by the new generic feature handler for the specified verbs.
+        # If a command is not in that list and not recognized otherwise, it will fall through.
+        # For verbs not in the new list, the old handle_environmental_interaction could still be called if desired.
         else:
             print(f"I don't understand '{full_command}'. Try 'look' or check commands.")
     return True # Command processed

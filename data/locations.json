@@ -204,20 +204,53 @@
         "items": [],
         "features": {
             "glowing_mushroom_patch": {
-                "description": "A patch of faintly glowing mushrooms.",
+                "description": "A cluster of softly glowing mushrooms.",
+                "farmable": true,
                 "actions": {
                     "pick": {
                         "outcomes": [
-                            {"type": "item", "item_id": "glowing_mushroom", "message": "You carefully pick a glowing mushroom."},
-                            {"type": "message", "stat_effect_temp": "dizzy", "message": "You pick a mushroom, and a puff of spores makes you feel dizzy for a moment."}
-                        ],
-                        "probabilities": [0.8, 0.2]
+                            {"type": "item", "item_id": "glowing_mushroom", "message": "You carefully pick a glowing mushroom.", "probability": 0.7},
+                            {"type": "message", "message": "You search but find no mushrooms ready to harvest.", "probability": 0.3}
+                        ]
+                    },
+                    "examine": {
+                        "outcomes": [
+                            {"type": "message", "message": "The mushrooms emit a soft, ethereal glow. They seem safe to pick."}
+                        ]
                     }
                 }
             },
             "hollow_log": {
                 "description": "An old, hollow log lies by the path.",
-                "actions": {"search": {"outcomes": [{"type": "item", "item_id": "lucky_charm_figurine", "message": "You search the hollow log and find a small, carved figurine!"}]}}
+                "farmable": false,
+                "actions": {
+                    "search": {
+                        "outcomes": [
+                            {"type": "item", "item_id": "lucky_charm_figurine", "message": "You search the hollow log and find a small, carved figurine!"}
+                        ]
+                    },
+                    "examine": {
+                        "outcomes": [
+                            {"type": "message", "message": "The log seems to have been hollowed out naturally. Something might be hidden inside."}
+                        ]
+                    }
+                }
+            },
+            "ancient_trail_markers": {
+                "description": "Old stone markers with faded carvings.",
+                "farmable": false,
+                "actions": {
+                    "examine": {
+                        "outcomes": [
+                            {"type": "message", "message": "Ancient runes mark the path. They seem to point toward the mystical grove."}
+                        ]
+                    },
+                    "read": {
+                        "outcomes": [
+                            {"type": "message", "message": "Though weathered, you can make out directions to various magical locations."}
+                        ]
+                    }
+                }
             }
         },
         "npcs": {
@@ -298,11 +331,21 @@
         "items": [],
         "features": {
             "wheat_stalks": {
-                "description": "Tall stalks of golden wheat ready for harvest.",
+                "description": "Ripe wheat stalks ready for harvest.",
+                "farmable": true,
                 "actions": {
                     "gather": {
                         "outcomes": [
-                            {"type": "item", "item_id": "wheat_bundle", "message": "You gather some wheat into a bundle."}
+                            {"type": "item", "item_id": "wheat_bundle", "message": "You gather some wheat into a bundle.", "probability": 0.8},
+                            {"type": "message", "message": "You fail to gather enough wheat for a bundle.", "probability": 0.2}
+                        ]
+                    },
+                    "examine": {
+                        "outcomes": [
+                            {
+                                "type": "message",
+                                "message": "The wheat stalks wave gently in the breeze, ready to be harvested."
+                            }
                         ]
                     }
                 }
@@ -336,13 +379,13 @@
         "features": {
             "fishing_spot": {
                 "description": "A good spot for fishing by the river's edge.",
+                "farmable": true,
                 "actions": {
                     "fish": {
                         "outcomes": [
-                            {"type": "item", "item_id": "fresh_fish", "message": "You catch a fish!"},
-                            {"type": "message", "message": "The fish got away..."}
-                        ],
-                        "probabilities": [0.6, 0.4]
+                            {"type": "item", "item_id": "fresh_fish", "message": "You catch a fish!", "probability": 0.6},
+                            {"type": "message", "message": "The fish got away...", "probability": 0.4}
+                        ]
                     }
                 }
             }
@@ -458,13 +501,14 @@
         "features": {
             "tidepool": {
                 "description": "A shallow pool left by the retreating tide.",
+                "farmable": true,
                 "actions": {
                     "search": {
                         "outcomes": [
-                            {"type": "item", "item_id": "pearl", "message": "You find a small pearl!"},
-                            {"type": "message", "message": "You find some interesting shells, but nothing valuable."}
-                        ],
-                        "probabilities": [0.2, 0.8]
+                            {"type": "item", "item_id": "pearl", "message": "You find a small pearl!", "probability": 0.2},
+                            {"type": "item", "item_id": "shells", "message": "You find some pretty shells.", "probability": 0.5},
+                            {"type": "message", "message": "You find nothing of interest.", "probability": 0.3}
+                        ]
                     }
                 }
             }
@@ -530,6 +574,7 @@
         "features": {
             "fallen_tree": {
                 "description": "A massive fallen tree covered in moss.",
+                "farmable": false,
                 "actions": {
                     "search": {
                         "outcomes": [
