@@ -59,9 +59,35 @@
   ],
 
   "decoration_system_active": true,
-  "_comment_decoration_system": "Overall toggle for the decoration system within this camp. Allows edit mode for placing furnitures, decorations, servants on tiles within the camp layout.",
+  "_comment_decoration_system": "Overall toggle for the decoration system within this camp.",
   "edit_mode_active": false,
-  "_comment_edit_mode": "Player-toggled state for placing/moving/rotating/appraising items.",
+  "_comment_edit_mode": "Player-toggled state for activating the camp editor.",
+  "editor_mode_state": {
+    "_comment_editor_state": "Holds the current state of the editor UI/logic when 'edit_mode_active' is true. This would be transient and reflect player interaction.",
+    "current_action": null, "_comment_action": "e.g., 'select', 'place', 'move', 'rotate', 'delete', 'appraise'",
+    "selected_item_instance_id": null, "_comment_selected_instance": "Instance ID of the furniture/decoration/servant currently selected for manipulation.",
+    "selected_item_master_id_for_placement": null, "_comment_selected_master": "Master ID of the item type chosen from a palette to be placed (e.g., 'master_bed_simple').",
+    "active_placement_category": null, "_comment_placement_category": "e.g., 'furniture', 'decorations', 'servants', or more specific sub-categories like 'beds', 'lighting', 'vendors'.",
+    "current_room_context_id": null, "_comment_room_context": "The room_id the editor is currently focused on, determining available tiles/space.",
+    "placement_ghost_attributes": {
+      "_comment_ghost": "Visual representation of the item before placement.",
+      "position_in_room": { "x": 0, "y": 0, "rotation_y": 0 },
+      "is_valid_location": false
+    },
+    "ui_panel_open": null, "_comment_ui_panel": "e.g., 'item_palette', 'properties_editor', 'room_selector'"
+  },
+
+  "placed_displays": [
+    {
+      "display_master_id": "master_display_homescore_panel",
+      "instance_id": "disp_inst_uuid_001",
+      "room_id_location": "room_main_hall_g1",
+      "position_in_room": { "x": 1.0, "y": 3.0, "rotation_y": 0 },
+      "display_type": "homescore_overview",
+      "homescore_value": 15,
+      "_comment_display": "Interactive displays or panels placed in the camp layout. Show overview info and manage features (e.g., Homescore, Servant list, Inventory)."
+    }
+  ],
 
   "placed_furnitures": [
     {

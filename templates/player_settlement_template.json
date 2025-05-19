@@ -12,8 +12,21 @@
 
   "city_decoration_system": {
     "_comment_city_decoration": "System for placing and managing structures within the settlement. Allows edit mode to move buildings and environmental structures. Store and decorative structures can be purchased and placed on tiles.",
-    "edit_mode_active": false,
-    "_comment_edit_mode": "Player-toggled state for placing/moving structures.",
+    "edit_mode_active": false, "_comment_edit_mode": "Player-toggled state for activating the settlement editor.",
+    "editor_mode_state": {
+      "_comment_editor_state": "Holds the current state of the settlement editor UI/logic when 'edit_mode_active' is true.",
+      "current_action": null, "_comment_action": "e.g., 'select_structure', 'place_structure', 'move_structure', 'rotate_structure', 'delete_structure', 'upgrade_structure'.",
+      "selected_structure_instance_id": null, "_comment_selected_instance": "Instance ID of the building/structure currently selected for manipulation.",
+      "selected_structure_master_id_for_placement": null, "_comment_selected_master": "Master ID of the structure type chosen from a build palette (e.g., 'master_bldg_general_store').",
+      "active_placement_category": null, "_comment_placement_category": "e.g., 'buildings_store', 'buildings_residential', 'decorations_city', 'environmental_features', 'defenses'.",
+      "selected_tile_id_context": null, "_comment_tile_context": "The tile_id the editor is currently focused on for placement or modification.",
+      "placement_ghost_attributes": {
+        "_comment_ghost": "Visual representation of the structure before placement on a tile.",
+        "position_offset_on_tile": { "x": 0, "y": 0, "rotation_y": 0 },
+        "is_valid_location_on_tile": false
+      },
+      "ui_panel_open": null, "_comment_ui_panel": "e.g., 'structure_palette', 'tile_inspector', 'settlement_overview_edit_mode'"
+    },
     "available_plot_tiles": [
       {
         "tile_id": "plot_A1",
@@ -30,7 +43,16 @@
       }
     ]
   },
-
+  "placed_displays": [
+    {
+      "display_master_id": "master_display_settlement_stats",
+      "instance_id": "settle_disp_inst_uuid_001",
+      "tile_id_location": "plot_A1",
+      "position_offset_on_tile": { "x": 5, "y": 5, "rotation_y": 90 },
+      "display_type": "settlement_stats_overview",
+      "_comment_display": "Interactive displays or panels placed in the settlement layout. Show overview info and manage features (e.g., Population, Resources, Building list, Economy)."
+    }
+  ],
   "placed_buildings_and_structures": [
     {
       "structure_master_id": "master_bldg_general_store",
